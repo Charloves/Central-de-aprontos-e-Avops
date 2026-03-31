@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 18px;
+      background: #f5f7fa;
+      color: #212529;
+    }
+
+    .card {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 18px;
+      border: 1px solid #ddd;
+      border-radius: 14px;
+      background: white;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    }
+
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .muted {
+      color: #666;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .subcard {
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid #e1e5ea;
+      border-radius: 12px;
+      background: #fafafa;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #343a40;
+    }
+
+    .alerta {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #fff3cd;
+      color: #856404;
+      font-size: 14px;
+      font-weight: 600;
+      border: 1px solid #ffe69c;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      margin-top: 6px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    input:disabled {
+      background: #e9ecef;
+      color: #6c757d;
+    }
+
+    button,
+    .btnlink {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px;
+      margin-top: 12px;
+      border: 0;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    button {
+      background: #0d6efd;
+      color: white;
+    }
+
+    button:disabled {
+      background: #adb5bd;
+      cursor: not-allowed;
+    }
+
+    .btnSecondary {
+      background: #6c757d;
+      color: white;
+    }
+
+    .btnlink {
+      background: #198754;
+      color: white;
+    }
+
+    .msg {
+      margin-top: 14px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .footer-link {
+      display: block;
+      margin-top: 16px;
+      text-align: center;
+      color: #0d6efd;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        margin: 12px;
+      }
+
+      .card {
+        padding: 14px;
+      }
+
+      .subcard {
+        padding: 14px;
+      }
+
+      .title {
+        font-size: 18px;
+      }
+
+      .section-title {
+        font-size: 15px;
+      }
+
+      input,
+      button,
+      .btnlink {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="title">Apronto</div>
+    <div><b><?= aprontoId ?></b> — <?= titulo ?></div>
+    <div class="muted">
+      Data: <b><?= data ?></b> • Público: <b><?= publico ?></b> • Status: <b><?= status ?></b>
+    </div>
+
+    <? if (status === 'FECHADO') { ?>
+      <div class="alerta">
+        Este apronto está fechado para registro de presença ou justificativa. O material permanece disponível para consulta e ciência.
+      </div>
+    <? } ?>
+
+    <div class="subcard">
+      <div class="section-title">Participação no Apronto</div>
+
+      <label for="id">Trigrama</label>
+      <input
+        id="id"
+        placeholder="Ex: CHA"
+        maxlength="3"
+        autocomplete="off"
+        oninput="this.value = this.value.toUpperCase()"
+        <?= status === 'FECHADO' ? 'disabled' : '' ?>
+      />
+
+      <button
+        id="btnPres"
+        onclick="presenca()"
+        <?= status === 'FECHADO' ? 'disabled' : '' ?>
+      >
+        Registrar Presença
+      </button>
+
+      <label for="obs">Justificativa simples</label>
+      <input
+        id="obs"
+        placeholder="Ex: escala"
+        autocomplete="off"
+        <?= status === 'FECHADO' ? 'disabled' : '' ?>
+      />
+
+      <button
+        id="btnJust"
+        class="btnSecondary"
+        onclick="justificar()"
+        <?= status === 'FECHADO' ? 'disabled' : '' ?>
+      >
+        Marcar como JUSTIFICADO
+      </button>
+    </div>
+
+    <div class="subcard">
+      <div class="section-title">Material do Apronto</div>
+
+      <label for="idMaterial">Trigrama</label>
+      <input
+        id="idMaterial"
+        placeholder="Ex: CHA"
+        maxlength="3"
+        autocomplete="off"
+        oninput="this.value = this.value.toUpperCase()"
+      />
+
+      <? if (linkMaterial) { ?>
+        <a class="btnlink" href="<?= linkMaterial ?>" download>Baixar material do apronto</a>
+      <? } else { ?>
+        <div class="muted">Não há material disponível para este apronto.</div>
+      <? } ?>
+
+      <? if (exigeCienciaMaterial === 'SIM') { ?>
+        <button id="btnCiencia" onclick="registrarCienciaMaterial()">Registrar ciência do material</button>
+      <? } else { ?>
+        <div class="muted" style="margin-top:10px;">
+          Este apronto não exige ciência formal do material.
+        </div>
+      <? } ?>
+    </div>
+
+    <div class="msg" id="msg"></div>
+
+    <a href="<?= baseUrl ?>" class="footer-link">← Voltar para a Central</a>
+  </div>
+
+  <script>
+    const aprontoId = "<?= aprontoId ?>";
+    const statusApronto = "<?= status ?>";
+
+    function setMsg(text, ok = true) {
+      const el = document.getElementById('msg');
+      if (!el) return;
+      el.textContent = text;
+      el.style.color = ok ? 'green' : 'crimson';
+    }
+
+    function presenca() {
+      if (statusApronto === 'FECHADO') {
+        setMsg('Apronto fechado para registro de presença.', false);
+        return;
+      }
+
+      const id = document.getElementById('id').value.trim();
+      const btn = document.getElementById('btnPres');
+
+      if (!id) {
+        setMsg('Informe seu Trigrama.', false);
+        return;
+      }
+
+      if (btn) btn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          setMsg(res?.msg || 'OK', !!res?.ok);
+          if (btn) btn.disabled = false;
+        })
+        .withFailureHandler((err) => {
+          setMsg('Falha: ' + (err?.message || err), false);
+          if (btn) btn.disabled = false;
+        })
+        .registrarPresenca({ aprontoId, id });
+    }
+
+    function justificar() {
+      if (statusApronto === 'FECHADO') {
+        setMsg('Apronto fechado para justificativa.', false);
+        return;
+      }
+
+      const id = document.getElementById('id').value.trim();
+      const obs = document.getElementById('obs').value.trim() || 'escala';
+      const btn = document.getElementById('btnJust');
+
+      if (!id) {
+        setMsg('Informe seu Trigrama.', false);
+        return;
+      }
+
+      if (btn) btn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          setMsg(res?.msg || 'OK', !!res?.ok);
+          if (btn) btn.disabled = false;
+        })
+        .withFailureHandler((err) => {
+          setMsg('Falha: ' + (err?.message || err), false);
+          if (btn) btn.disabled = false;
+        })
+        .justificarAusencia({ aprontoId, id, obs });
+    }
+
+    function registrarCienciaMaterial() {
+      const id = document.getElementById('idMaterial').value.trim();
+      const btn = document.getElementById('btnCiencia');
+
+      if (!id) {
+        setMsg('Informe seu Trigrama para registrar a ciência do material.', false);
+        return;
+      }
+
+      if (btn) btn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          setMsg(res?.msg || 'OK', !!res?.ok);
+          if (btn) btn.disabled = false;
+        })
+        .withFailureHandler((err) => {
+          setMsg('Falha: ' + (err?.message || err), false);
+          if (btn) btn.disabled = false;
+        })
+        .registrarCienciaMaterial({ aprontoId, id });
+    }
+  </script>
+</body>
+</html>

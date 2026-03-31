@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 18px;
+      background: #f5f7fa;
+      color: #212529;
+    }
+
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .card {
+      padding: 14px;
+      margin-bottom: 14px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      background: white;
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .muted {
+      color: #666;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    input,
+    select {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    input {
+      flex: 1;
+      min-width: 190px;
+    }
+
+    select {
+      min-width: 180px;
+    }
+
+    button {
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 10px;
+      cursor: pointer;
+      background: #0d6efd;
+      color: white;
+      font-weight: 600;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      min-width: 620px;
+      border-collapse: collapse;
+      margin-top: 10px;
+      background: white;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #eee;
+      padding: 10px;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th {
+      font-size: 12px;
+      color: #555;
+      text-transform: uppercase;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+
+    .pendente {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .ciente {
+      background: #d1e7dd;
+      color: #0f5132;
+    }
+
+    .danger {
+      background: #f8d7da;
+      color: #842029;
+    }
+
+    a {
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        margin: 12px;
+      }
+
+      .row {
+        flex-direction: column;
+      }
+
+      input,
+      select,
+      button {
+        width: 100%;
+        font-size: 16px;
+      }
+
+      .card {
+        padding: 12px;
+      }
+
+      .title {
+        font-size: 17px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="title">Central de AVOPs</div>
+      <div class="muted">
+        AVOPs dos <b>últimos 90 dias</b>. Digite seu <b>ID/matrícula</b>, filtre e clique em <b>Ler</b>.
+      </div>
+
+      <div class="row">
+        <input id="id" placeholder="Sua matrícula/ID" autocomplete="off" />
+        <select id="status">
+          <option value="PENDENTE">Somente pendentes</option>
+          <option value="TODOS">Todos</option>
+          <option value="CIENTE">Somente cientes</option>
+        </select>
+        <input id="busca" placeholder="Filtrar por AVOP_ID ou título" autocomplete="off" />
+        <button onclick="carregar()">Buscar</button>
+      </div>
+
+      <div class="muted" id="msg" style="margin-top:10px;"></div>
+      <div id="resumo" class="muted" style="margin-top:10px; font-weight:700;"></div>
+    </div>
+
+    <div class="card">
+      <div class="title">Resultados</div>
+      <div id="conteudo" class="muted">Informe seu ID e clique em Buscar.</div>
+    </div>
+  </div>
+
+  <script>
+    const baseUrl = "<?= baseUrl ?>";
+
+    function setMsg(t, ok = true) {
+      const el = document.getElementById('msg');
+      if (!el) return;
+      el.textContent = t;
+      el.style.color = ok ? '#0a7' : 'crimson';
+    }
+
+    function esc(s) {
+      return (s || '').toString().replace(/[&<>"']/g, m => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[m]));
+    }
+
+    function carregar() {
+      const id = document.getElementById('id').value.trim();
+      const status = document.getElementById('status').value;
+      const busca = document.getElementById('busca').value.trim();
+
+      if (!id) {
+        setMsg('Informe seu ID/matrícula.', false);
+        return;
+      }
+
+      setMsg('Carregando...', true);
+      document.getElementById('conteudo').innerHTML = 'Carregando...';
+      document.getElementById('resumo').textContent = '';
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (!res || !res.ok) {
+            setMsg(res && res.msg ? res.msg : 'Erro ao carregar.', false);
+            document.getElementById('conteudo').innerHTML = '';
+            document.getElementById('resumo').textContent = '';
+            return;
+          }
+
+          setMsg(`Encontrados ${res.items.length} AVOP(s).`, true);
+
+          const total = res.total ?? res.items.length;
+          const pend = res.pendentes ?? 0;
+          const venc = res.vencidos ?? 0;
+
+          let textoResumo = `Total (90 dias): ${total}. Pendentes: ${pend}.`;
+          if (venc > 0) textoResumo += ` Vencidos: ${venc}.`;
+
+          const resumoEl = document.getElementById('resumo');
+          resumoEl.textContent = textoResumo;
+          resumoEl.style.color = venc > 0 ? 'crimson' : (pend > 0 ? '#b45309' : '#0a7');
+
+          if (res.items.length === 0) {
+            document.getElementById('conteudo').innerHTML =
+              'Nenhum AVOP encontrado para os filtros.';
+
+            resumoEl.textContent = 'Nenhum AVOP encontrado para os filtros.';
+            resumoEl.style.color = '#666';
+            return;
+          }
+
+          const rows = res.items.map((it) => {
+            const pillClass = it.status === 'PENDENTE'
+              ? (it.atrasado ? 'danger' : 'pendente')
+              : 'ciente';
+
+            const pillText = it.atrasado ? 'PENDENTE (VENCIDO)' : it.status;
+            const link = `${baseUrl}?avop=${encodeURIComponent(it.avopId)}`;
+
+            return `
+              <tr>
+                <td><b>${esc(it.avopId)}</b><br><span class="muted">${esc(it.titulo)}</span></td>
+                <td>${esc(it.dataEmissaoBR)}</td>
+                <td>${esc(it.vencimentoBR)}</td>
+                <td><span class="pill ${pillClass}">${esc(pillText)}</span></td>
+                <td><a href="${link}">Ler</a></td>
+              </tr>
+            `;
+          }).join('');
+
+          document.getElementById('conteudo').innerHTML = `
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>AVOP</th>
+                    <th>Emissão</th>
+                    <th>Vencimento</th>
+                    <th>Status</th>
+                    <th>Ação</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `;
+        })
+        .withFailureHandler((err) => {
+          setMsg('Falha: ' + (err && err.message ? err.message : err), false);
+          document.getElementById('conteudo').innerHTML = '';
+          document.getElementById('resumo').textContent = '';
+        })
+        .getCentralData({ id, status, busca, dias: 90 });
+    }
+  </script>
+</body>
+</html>

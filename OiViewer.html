@@ -1,0 +1,271 @@
+    <!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f7fa;
+      color: #212529;
+    }
+
+    .topbar {
+      padding: 12px 14px;
+      background: white;
+      border-bottom: 1px solid #dde2e7;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .muted {
+      color: #666;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .toolbar button {
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #0d6efd;
+      color: white;
+      font-weight: 600;
+    }
+
+    .toolbar button.secondary {
+      background: #6c757d;
+    }
+
+    .toolbar input {
+      width: 70px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .viewer-wrap {
+      padding: 14px;
+    }
+
+    .canvas-wrap {
+      background: white;
+      border: 1px solid #d9dee3;
+      border-radius: 12px;
+      padding: 10px;
+      overflow: auto;
+      text-align: center;
+    }
+
+    canvas {
+      max-width: 100%;
+      height: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .error {
+      color: crimson;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 600px) {
+      .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .toolbar button,
+      .toolbar input {
+        width: 100%;
+      }
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="title"><?= oiKey ?></div>
+    <div class="muted">
+      Aeronave: <b><?= aeronave ?></b> •
+      Programa: <b><?= programa ?></b> •
+      Subprograma: <b><?= subprograma ?></b>
+    </div>
+    <div class="muted">
+      <?= chaveExibicao ?><?= pagInicial ? ' • Página inicial prevista: ' + pagInicial : '' ?>
+    </div>
+
+    <div class="toolbar">
+      <button class="secondary" onclick="paginaAnterior()">Página anterior</button>
+      <button onclick="proximaPagina()">Próxima página</button>
+
+      <input id="pageNumber" type="number" min="1" value="<?= pagInicial ?>" />
+      <button onclick="irParaPagina()">Ir</button>
+
+      <button class="secondary" onclick="zoomMenos()">Zoom -</button>
+      <button class="secondary" onclick="zoomMais()">Zoom +</button>
+
+      <button class="secondary" onclick="abrirOriginal()">Abrir original</button>
+    </div>
+
+    <div class="status" id="status">Carregando PDF...</div>
+    <div class="error" id="erro"></div>
+  </div>
+
+  <div class="viewer-wrap">
+    <div class="canvas-wrap">
+      <canvas id="pdfCanvas"></canvas>
+    </div>
+  </div>
+
+  <script type="module">
+    const pdfUrl = "<?= pdfUrl ?>";
+    const paginaInicial = Number("<?= pagInicial ?>") || 1;
+
+    const statusEl = document.getElementById('status');
+    const erroEl = document.getElementById('erro');
+    const pageInput = document.getElementById('pageNumber');
+    const canvas = document.getElementById('pdfCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let pdfDoc = null;
+    let paginaAtual = paginaInicial;
+    let totalPaginas = 0;
+    let escala = 1.2;
+    let renderizando = false;
+    let paginaPendente = null;
+
+    const pdfjsLib = globalThis.pdfjsLib;
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+
+    function setStatus(txt) {
+      statusEl.textContent = txt || '';
+    }
+
+    function setErro(txt) {
+      erroEl.textContent = txt || '';
+    }
+
+    async function renderPagina(num) {
+      if (!pdfDoc) return;
+
+      renderizando = true;
+      setErro('');
+
+      try {
+        const page = await pdfDoc.getPage(num);
+        const viewport = page.getViewport({ scale: escala });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({
+          canvasContext: ctx,
+          viewport: viewport
+        }).promise;
+
+        paginaAtual = num;
+        pageInput.value = num;
+        setStatus(`Página ${paginaAtual} de ${totalPaginas} • Zoom ${Math.round(escala * 100)}%`);
+      } catch (err) {
+        setErro('Falha ao renderizar a página: ' + (err?.message || err));
+      }
+
+      renderizando = false;
+
+      if (paginaPendente !== null) {
+        const prox = paginaPendente;
+        paginaPendente = null;
+        renderPagina(prox);
+      }
+    }
+
+    function filaOuRender(num) {
+      if (num < 1 || num > totalPaginas) return;
+      if (renderizando) {
+        paginaPendente = num;
+      } else {
+        renderPagina(num);
+      }
+    }
+
+    window.paginaAnterior = function() {
+      if (paginaAtual <= 1) return;
+      filaOuRender(paginaAtual - 1);
+    };
+
+    window.proximaPagina = function() {
+      if (paginaAtual >= totalPaginas) return;
+      filaOuRender(paginaAtual + 1);
+    };
+
+    window.irParaPagina = function() {
+      const alvo = Number(pageInput.value || 1);
+      if (!alvo || alvo < 1 || alvo > totalPaginas) {
+        setErro(`Página inválida. Informe um valor entre 1 e ${totalPaginas}.`);
+        return;
+      }
+      filaOuRender(alvo);
+    };
+
+    window.zoomMais = function() {
+      escala += 0.2;
+      filaOuRender(paginaAtual);
+    };
+
+    window.zoomMenos = function() {
+      if (escala <= 0.4) return;
+      escala -= 0.2;
+      filaOuRender(paginaAtual);
+    };
+
+    window.abrirOriginal = function() {
+      window.open(pdfUrl, '_blank');
+    };
+
+    async function iniciar() {
+      try {
+        setStatus('Carregando PDF...');
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        pdfDoc = await loadingTask.promise;
+        totalPaginas = pdfDoc.numPages;
+
+        const paginaSegura = Math.min(Math.max(1, paginaInicial), totalPaginas);
+        filaOuRender(paginaSegura);
+      } catch (err) {
+        setStatus('');
+        setErro('Não foi possível carregar o PDF no visualizador. ' + (err?.message || err));
+      }
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>

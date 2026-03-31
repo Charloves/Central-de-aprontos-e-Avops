@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 10px;
+      background-image: url('https://drive.google.com/thumbnail?id=1r71N2QiYdon9CV_Z7g-qZCru7KHf42d6&sz=w1000');
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 300px;
+      background-attachment: fixed;
+    }
+
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    .card {
+      padding: 14px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.95);
+      margin-bottom: 14px;
+    }
+
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 4px;
+    }
+
+    .muted {
+      color: #666;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .box {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-left: 4px solid #0d6efd;
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .box b {
+      display: inline-block;
+      margin-bottom: 4px;
+    }
+
+    .box ul {
+      margin: 6px 0 0 18px;
+      padding: 0;
+    }
+
+    .box li {
+      margin: 4px 0;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      align-items: center;
+    }
+
+    input, select {
+      padding: 10px 12px;
+      border: 1px solid #ced4da;
+      border-radius: 8px;
+      font-size: 14px;
+      background: white;
+      box-sizing: border-box;
+    }
+
+    input {
+      flex: 1;
+      min-width: 190px;
+    }
+
+    select {
+      min-width: 180px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 10px;
+      cursor: pointer;
+      background: #0d6efd;
+      color: white;
+      font-weight: 600;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      padding: 12px 14px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
+      background: #f8f9fa;
+      font-size: 14px;
+    }
+
+    .tab.active {
+      font-weight: 700;
+      border-color: #999;
+      background: #e9ecef;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      min-width: 600px;
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      background: white;
+    }
+
+    th, td {
+      border-bottom: 1px solid #edf0f2;
+      padding: 12px 10px;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th {
+      font-size: 12px;
+      color: #6c757d;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      background: #f8f9fa;
+    }
+
+    .pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-block;
+    }
+
+    .pendente {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .ciente {
+      background: #d1e7dd;
+      color: #0f5132;
+    }
+
+    .danger {
+      background: #f8d7da;
+      color: #842029;
+    }
+
+    .btn-mini {
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #0d6efd;
+      color: white;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .oi-viewer-card {
+      margin-top: 14px;
+      padding: 12px;
+      border: 1px solid #d9dee3;
+      border-radius: 12px;
+      background: #f8f9fa;
+    }
+
+    .oi-meta {
+      margin-bottom: 10px;
+    }
+
+    .oi-frame {
+      width: 100%;
+      height: 80vh;
+      border: none;
+      border-radius: 10px;
+      background: white;
+    }
+
+    a {
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        background-size: 220px;
+      }
+
+      .row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      input, select, button {
+        width: 100%;
+        font-size: 16px;
+      }
+
+      button {
+        padding: 14px;
+      }
+
+      .tabs {
+        flex-direction: column;
+      }
+
+      .tab {
+        width: 100%;
+        text-align: center;
+      }
+
+      .card {
+        padding: 12px;
+      }
+
+      .title {
+        font-size: 18px;
+      }
+
+      .subtitle {
+        font-size: 14px;
+      }
+
+      .oi-frame {
+        height: 72vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div style="text-align:center; margin-bottom:12px;">
+      <img src="https://drive.google.com/thumbnail?id=1uKI8RJggnDWvRXHOuNCWNFJwJxLB2WVl&sz=w1000" style="max-height:80px; opacity:0.9;">
+    </div>
+
+    <div class="card">
+      <div class="title">Central Operacional</div>
+      <div class="subtitle">Controle de AVOPs, Aprontos e OI</div>
+      <div class="muted">Acompanhe pendências, registre ciência e acesse documentos operacionais em um único ambiente.</div>
+      <div class="muted" id="dataAtual" style="margin-top:4px;"></div>
+
+      <div class="box">
+        <b>Instruções de uso</b>
+
+        <ul>
+          <li><b>1.</b> Digite seu <b>TRIGRAMA</b> e clique em <b>Buscar</b>.</li>
+          <li><b>2.</b> Escolha o módulo desejado: <b>AVOPs</b>, <b>Aprontos</b> ou <b>OI</b>.</li>
+        </ul>
+
+        <div style="margin-top:8px;"><b>AVOPs — leitura e ciência</b></div>
+        <ul>
+          <li>Clique em <b>Registrar e ler</b>. Sua ciência será registrada automaticamente.</li>
+          <li>O documento será aberto para leitura.</li>
+        </ul>
+
+        <div style="margin-top:8px;"><b>Aprontos — presença e material</b></div>
+        <ul>
+          <li>Clique em <b>Gerenciar apronto</b>. Registre presença ou justificativa.</li>
+          <li>Se houver material, será possível fazer o download.</li>
+        </ul>
+
+        <div style="margin-top:8px;"><b>OI — Ordem de Instrução</b></div>
+        <ul>
+          <li>Selecione a aeronave, informe o código alfanumérico da missão e clique em <b>Buscar</b>.</li>
+          <li>Se houver uma única correspondência, a OI será exibida na própria tela.</li>
+          <li>Se houver várias correspondências, escolha a desejada na tabela e clique em <b>Ver OI</b>.</li>
+        </ul>
+
+        <div class="muted" style="margin-top:8px;">
+          O sistema envia lembretes automáticos por e-mail para pendências de AVOP.
+        </div>
+      </div>
+
+      <div class="row">
+        <input
+          id="id"
+          placeholder="Trigrama (ex: CHA)"
+          maxlength="3"
+          inputmode="text"
+          autocapitalize="characters"
+          oninput="this.value = this.value.toUpperCase()"
+        />
+        <input id="busca" placeholder="Filtrar por AVOP_ID ou título" autocomplete="off" />
+        <button type="button" onclick="buscar()">Buscar</button>
+      </div>
+
+      <div class="tabs">
+        <div id="tabAvop" class="tab active" onclick="setAba('AVOP')">AVOPs — leitura e ciência</div>
+        <div id="tabApr" class="tab" onclick="setAba('APR')">Aprontos — presença e material</div>
+        <div id="tabOi" class="tab" onclick="setAba('OI')">OI — Ordem de Instrução</div>
+      </div>
+
+      <div class="row">
+        <select id="filtroAvop">
+          <option value="PENDENTE">AVOP: Somente pendentes</option>
+          <option value="TODOS">AVOP: Todos</option>
+          <option value="CIENTE">AVOP: Somente cientes</option>
+        </select>
+
+        <select id="filtroApr" style="display:none;">
+          <option value="ABERTOS">Apronto: Abertos</option>
+          <option value="TODOS">Apronto: Todos</option>
+          <option value="FECHADOS">Apronto: Fechados</option>
+        </select>
+
+        <select id="filtroOiAeronave" style="display:none;">
+          <option value="H50">OI: H50</option>
+          <option value="H125">OI: H125</option>
+        </select>
+      </div>
+
+      <div class="muted" id="msg" style="margin-top:10px;"></div>
+      <div class="muted" id="resumo" style="margin-top:6px; font-weight:700;"></div>
+    </div>
+
+    <div class="card">
+      <div class="title">Resultados</div>
+      <div id="conteudo" class="muted">Informe seu Trigrama, selecione o módulo desejado e clique em Buscar.</div>
+    </div>
+  </div>
+
+  <script>
+    const baseUrl = "<?= baseUrl ?>";
+    let aba = 'AVOP';
+    let oiResultados = [];
+    let oiCodigoAtual = '';
+    let oiAeronaveAtual = 'H50';
+
+    function setAba(nova) {
+      aba = nova;
+
+      document.getElementById('tabAvop').classList.toggle('active', aba === 'AVOP');
+      document.getElementById('tabApr').classList.toggle('active', aba === 'APR');
+      document.getElementById('tabOi').classList.toggle('active', aba === 'OI');
+
+      document.getElementById('filtroAvop').style.display = (aba === 'AVOP') ? '' : 'none';
+      document.getElementById('filtroApr').style.display = (aba === 'APR') ? '' : 'none';
+      document.getElementById('filtroOiAeronave').style.display = (aba === 'OI') ? '' : 'none';
+
+      document.getElementById('msg').textContent = '';
+      document.getElementById('resumo').textContent = '';
+      oiResultados = [];
+      oiCodigoAtual = '';
+
+      atualizarPlaceholderBusca_();
+
+      if (aba === 'AVOP') {
+        document.getElementById('conteudo').innerHTML =
+          'Módulo AVOPs: consulte pendências, registre ciência e acesse os avisos.';
+      } else if (aba === 'APR') {
+        document.getElementById('conteudo').innerHTML =
+          'Módulo Aprontos: consulte eventos, registre presença/justificativa e baixe o material.';
+      } else {
+        document.getElementById('conteudo').innerHTML =
+          'Módulo OI: selecione a aeronave, informe o código alfanumérico da missão e clique em Buscar.';
+      }
+    }
+
+    function atualizarPlaceholderBusca_() {
+      const buscaEl = document.getElementById('busca');
+      if (!buscaEl) return;
+
+      if (aba === 'OI') {
+        buscaEl.placeholder = 'Buscar OI por código (ex: 01HL01D07, 01HL07 ou 01HL)';
+      } else if (aba === 'AVOP') {
+        buscaEl.placeholder = 'Filtrar por AVOP_ID ou título';
+      } else {
+        buscaEl.placeholder = 'Filtrar por ID ou título';
+      }
+    }
+
+    function setMsg(t, ok = true) {
+      const el = document.getElementById('msg');
+      el.textContent = t;
+      el.style.color = ok ? '#0a7' : 'crimson';
+    }
+
+    function esc(s) {
+      return (s || '').toString().replace(/[&<>"']/g, m => ({
+        '&':'&amp;',
+        '<':'&lt;',
+        '>':'&gt;',
+        '"':'&quot;',
+        "'":'&#39;'
+      }[m]));
+    }
+
+    function buscar() {
+      const id = document.getElementById('id').value.trim();
+      const busca = document.getElementById('busca').value.trim();
+
+      if (!id) {
+        setMsg('Informe seu Trigrama.', false);
+        return;
+      }
+
+      document.getElementById('conteudo').innerHTML = 'Carregando...';
+      document.getElementById('resumo').textContent = '';
+      setMsg('Carregando...', true);
+
+      if (aba === 'OI') {
+        const aeronave = document.getElementById('filtroOiAeronave').value;
+        carregarOi_(id, busca, aeronave);
+        return;
+      }
+
+      if (aba === 'AVOP') {
+        const status = document.getElementById('filtroAvop').value;
+
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res || !res.ok) {
+              setMsg(res && res.msg ? res.msg : 'Erro ao carregar.', false);
+              document.getElementById('conteudo').innerHTML = '';
+              document.getElementById('resumo').textContent = '';
+              return;
+            }
+
+            setMsg(`Encontrados ${res.items.length} AVOP(s).`, true);
+
+            const total = res.total ?? res.items.length;
+            const pend = res.pendentes ?? 0;
+            const venc = res.vencidos ?? 0;
+
+            const resumoEl = document.getElementById('resumo');
+            let txt = `Total (90 dias): ${total}. Pendentes: ${pend}.`;
+            if (venc > 0) txt += ` Vencidos: ${venc}.`;
+
+            resumoEl.textContent = txt;
+            resumoEl.style.fontWeight = '700';
+            resumoEl.style.padding = '10px';
+            resumoEl.style.borderRadius = '10px';
+
+            if (venc > 0) {
+              resumoEl.style.color = '#842029';
+              resumoEl.style.background = '#f8d7da';
+            } else if (pend > 0) {
+              resumoEl.style.color = '#856404';
+              resumoEl.style.background = '#fff3cd';
+            } else {
+              resumoEl.style.color = '#0f5132';
+              resumoEl.style.background = '#d1e7dd';
+            }
+
+            if (res.items.length === 0) {
+              document.getElementById('conteudo').innerHTML = 'Nenhum AVOP encontrado para os filtros.';
+              return;
+            }
+
+            const rows = res.items.map(it => {
+              const pillClass = it.status === 'PENDENTE' ? (it.atrasado ? 'danger' : 'pendente') : 'ciente';
+              const pillText = it.atrasado ? 'PENDENTE (VENCIDO)' : it.status;
+              const link = `${baseUrl}?avop=${encodeURIComponent(it.avopId)}`;
+
+              return `
+                <tr>
+                  <td><b>${esc(it.avopId)}</b><br><span class="muted">${esc(it.titulo)}</span></td>
+                  <td>${esc(it.dataEmissaoBR)}</td>
+                  <td>${esc(it.vencimentoBR)}</td>
+                  <td><span class="pill ${pillClass}">${esc(pillText)}</span></td>
+                  <td><a href="${link}">Registrar e ler</a></td>
+                </tr>
+              `;
+            }).join('');
+
+            document.getElementById('conteudo').innerHTML = `
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>AVOP</th><th>Emissão</th><th>Vencimento</th><th>Situação</th><th>Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            `;
+          })
+          .withFailureHandler((err) => {
+            setMsg('Falha: ' + (err && err.message ? err.message : err), false);
+            document.getElementById('conteudo').innerHTML = '';
+            document.getElementById('resumo').textContent = '';
+          })
+          .getCentralData({ id, status, busca, dias: 90 });
+      }
+
+      if (aba === 'APR') {
+        const status = document.getElementById('filtroApr').value;
+
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (!res || !res.ok) {
+              setMsg(res && res.msg ? res.msg : 'Erro ao carregar.', false);
+              document.getElementById('conteudo').innerHTML = '';
+              document.getElementById('resumo').textContent = '';
+              return;
+            }
+
+            setMsg(`Encontrados ${res.items.length} apronto(s).`, true);
+
+            const pend = res.pendentes ?? 0;
+            const resumoEl = document.getElementById('resumo');
+            resumoEl.textContent = `Pendentes (abertos): ${pend}.`;
+            resumoEl.style.fontWeight = '700';
+            resumoEl.style.padding = '10px';
+            resumoEl.style.borderRadius = '10px';
+
+            if (pend > 0) {
+              resumoEl.style.color = '#856404';
+              resumoEl.style.background = '#fff3cd';
+            } else {
+              resumoEl.style.color = '#0f5132';
+              resumoEl.style.background = '#d1e7dd';
+            }
+
+            if (res.items.length === 0) {
+              document.getElementById('conteudo').innerHTML = 'Nenhum apronto encontrado para os filtros / seu perfil.';
+              return;
+            }
+
+            const rows = res.items.map(it => {
+              const pillClass = (it.statusUsuario === 'PENDENTE') ? 'pendente' : 'ciente';
+              const cienciaTxt = it.exigeCienciaMaterial === 'SIM'
+                ? (it.cienciaMaterial === 'SIM' ? 'SIM' : 'NÃO')
+                : '-';
+              const link = `${baseUrl}?apronto=${encodeURIComponent(it.aprontoId)}`;
+
+              return `
+                <tr>
+                  <td><b>${esc(it.aprontoId)}</b><br><span class="muted">${esc(it.titulo)}</span></td>
+                  <td>${esc(it.dataBR)}</td>
+                  <td>${esc(it.publico)}</td>
+                  <td>${esc(it.statusApronto)}</td>
+                  <td><span class="pill ${pillClass}">${esc(it.statusUsuario)}</span></td>
+                  <td>${esc(cienciaTxt)}</td>
+                  <td><a href="${link}">Gerenciar apronto</a></td>
+                </tr>
+              `;
+            }).join('');
+
+            document.getElementById('conteudo').innerHTML = `
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Apronto</th><th>Data</th><th>Público</th><th>Status do evento</th><th>Meu status</th><th>Ciência do material</th><th>Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            `;
+          })
+          .withFailureHandler((err) => {
+            setMsg('Falha: ' + (err && err.message ? err.message : err), false);
+            document.getElementById('conteudo').innerHTML = '';
+            document.getElementById('resumo').textContent = '';
+          })
+          .getCentralAprontos({ id, status, busca, dias: 90 });
+      }
+    }
+
+    function carregarOi_(id, codigo, aeronave) {
+      if (!codigo) {
+        setMsg('Informe o código da OI.', false);
+        document.getElementById('conteudo').innerHTML = '';
+        return;
+      }
+
+      oiAeronaveAtual = aeronave;
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (!res || !res.ok) {
+            setMsg(res && res.msg ? res.msg : 'Erro ao carregar OI.', false);
+            document.getElementById('conteudo').innerHTML = '';
+            document.getElementById('resumo').textContent = '';
+            oiResultados = [];
+            oiCodigoAtual = '';
+            return;
+          }
+
+          oiResultados = res.items || [];
+          oiCodigoAtual = codigo;
+
+          if (oiResultados.length === 0) {
+            setMsg('Nenhuma OI encontrada para o código informado.', false);
+            document.getElementById('resumo').textContent = '';
+            document.getElementById('conteudo').innerHTML = 'Nenhuma OI encontrada para o código informado.';
+            return;
+          }
+
+          if (oiResultados.length === 1) {
+            setMsg('OI encontrada.', true);
+            document.getElementById('resumo').textContent = `Aeronave: ${aeronave}. Código pesquisado: ${codigo}. 1 correspondência encontrada.`;
+            renderOiViewerUnico_(oiResultados[0]);
+            return;
+          }
+
+          setMsg(`Encontradas ${oiResultados.length} OI(s). Selecione a desejada.`, true);
+          document.getElementById('resumo').textContent = `Aeronave: ${aeronave}. Código pesquisado: ${codigo}. ${oiResultados.length} correspondências encontradas.`;
+          renderTabelaOi_(oiResultados);
+        })
+        .withFailureHandler((err) => {
+          setMsg('Falha: ' + (err && err.message ? err.message : err), false);
+          document.getElementById('conteudo').innerHTML = '';
+          document.getElementById('resumo').textContent = '';
+          oiResultados = [];
+          oiCodigoAtual = '';
+        })
+        .getCentralOI({ id, codigo, aeronave });
+    }
+
+    function renderTabelaOi_(items, indiceSelecionado) {
+      const rows = items.map((it, idx) => {
+        return `
+          <tr>
+            <td><b>${esc(it.oiKey)}</b></td>
+            <td>${esc(it.programa)}</td>
+            <td>${esc(it.subprograma)}</td>
+            <td>${esc(it.chaveExibicao || it.faseId || '')}</td>
+            <td><button type="button" class="btn-mini" onclick="verOi(${idx})">Ver OI</button></td>
+          </tr>
+        `;
+      }).join('');
+
+      let viewer = '';
+      if (typeof indiceSelecionado === 'number' && indiceSelecionado >= 0 && items[indiceSelecionado]) {
+        viewer = renderViewerOi_(items[indiceSelecionado]);
+      }
+
+      document.getElementById('conteudo').innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>OI_KEY</th>
+                <th>Programa</th>
+                <th>Subprograma</th>
+                <th>Chave de exibição</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        ${viewer}
+      `;
+    }
+
+    function renderOiViewerUnico_(item) {
+      document.getElementById('conteudo').innerHTML = renderViewerOi_(item);
+    }
+
+    function renderViewerOi_(item) {
+      return `
+        <div class="oi-viewer-card">
+          <div class="oi-meta">
+            <div><b>${esc(item.oiKey)}</b></div>
+            <div class="muted">
+              Aeronave: <b>${esc(item.aeronave)}</b> •
+              Programa: <b>${esc(item.programa)}</b> •
+              Subprograma: <b>${esc(item.subprograma)}</b> •
+              Página inicial: <b>${esc(String(item.pagInicial))}</b>
+            </div>
+            <div class="muted">${esc(item.chaveExibicao || item.titulo || '')}</div>
+          </div>
+          <iframe class="oi-frame" src="${esc(item.viewerUrl)}"></iframe>
+        </div>
+      `;
+    }
+
+    function verOi(index) {
+      if (!oiResultados || !oiResultados[index]) return;
+      renderTabelaOi_(oiResultados, index);
+      setMsg('OI selecionada.', true);
+    }
+
+    document.getElementById('dataAtual').textContent =
+      'Atualizado em: ' + new Date().toLocaleDateString('pt-BR');
+
+    atualizarPlaceholderBusca_();
+  </script>
+</body>
+</html>
