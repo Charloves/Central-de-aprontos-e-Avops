@@ -10,6 +10,11 @@ dist/
 build/
 coverage/
 
+# Artefatos gerados localmente
+oi_fases_h50/
+qrcode-exec*.png
+divulgar-avop-button.*
+
 *.log
 *.tmp
 *.bak

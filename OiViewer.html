@@ -1,7 +1,8 @@
-    <!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
   <base target="_top">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
@@ -107,7 +108,7 @@
     }
   </style>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+  
 </head>
 <body>
   <div class="topbar">
@@ -122,16 +123,17 @@
     </div>
 
     <div class="toolbar">
+      <button class="secondary" onclick="voltarCentral()">Voltar</button>
       <button class="secondary" onclick="paginaAnterior()">Página anterior</button>
       <button onclick="proximaPagina()">Próxima página</button>
 
-      <input id="pageNumber" type="number" min="1" value="<?= pagInicial ?>" />
+      <input id="pageNumber" type="number" min="1" value="<?= initialPage ?>" />
       <button onclick="irParaPagina()">Ir</button>
 
       <button class="secondary" onclick="zoomMenos()">Zoom -</button>
       <button class="secondary" onclick="zoomMais()">Zoom +</button>
 
-      <button class="secondary" onclick="abrirOriginal()">Abrir original</button>
+      <button class="secondary" onclick="baixarPdf()">Baixar PDF</button>
     </div>
 
     <div class="status" id="status">Carregando PDF...</div>
@@ -144,9 +146,11 @@
     </div>
   </div>
 
-  <script type="module">
-    const pdfUrl = "<?= pdfUrl ?>";
-    const paginaInicial = Number("<?= pagInicial ?>") || 1;
+  <script>
+    const sessionToken = <?!= JSON.stringify(token) ?>;
+    const aeronave = <?!= JSON.stringify(aeronave) ?>;
+    const oiKey = <?!= JSON.stringify(oiKey) ?>;
+    const paginaInicial = Number("<?= initialPage ?>") || Number("<?= pagInicial ?>") || 1;
 
     const statusEl = document.getElementById('status');
     const erroEl = document.getElementById('erro');
@@ -160,10 +164,8 @@
     let escala = 1.2;
     let renderizando = false;
     let paginaPendente = null;
-
-    const pdfjsLib = globalThis.pdfjsLib;
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+    let pdfBlobUrl = '';
+    let pdfFileName = 'oi.pdf';
 
     function setStatus(txt) {
       statusEl.textContent = txt || '';
@@ -171,6 +173,64 @@
 
     function setErro(txt) {
       erroEl.textContent = txt || '';
+    }
+
+    function atualizarUrlPagina(page) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('page', page);
+        window.history.replaceState({}, '', url.toString());
+      } catch (err) {}
+    }
+
+    function base64ParaUint8Array(base64) {
+      const binary = atob(base64 || '');
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    function atualizarBlobOriginal(bytes, mimeType) {
+      if (pdfBlobUrl) {
+        URL.revokeObjectURL(pdfBlobUrl);
+      }
+      const blob = new Blob([bytes], { type: mimeType || 'application/pdf' });
+      pdfBlobUrl = URL.createObjectURL(blob);
+    }
+
+    let pdfJsLoadPromise = null;
+
+    async function carregarPdfJs() {
+      if (window.pdfjsLib) {
+        return window.pdfjsLib;
+      }
+
+      if (!pdfJsLoadPromise) {
+        pdfJsLoadPromise = new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler((source) => {
+              try {
+                const script = document.createElement('script');
+                script.type = 'text/javascript';
+                script.text = String(source || '');
+                document.head.appendChild(script);
+                if (!window.pdfjsLib) {
+                  reject(new Error('Não foi possível inicializar a biblioteca do visualizador PDF.'));
+                  return;
+                }
+                resolve(window.pdfjsLib);
+              } catch (err) {
+                reject(err);
+              }
+            })
+            .withFailureHandler(reject)
+            .getPdfJsSource();
+        });
+      }
+
+      return pdfJsLoadPromise;
     }
 
     async function renderPagina(num) {
@@ -193,6 +253,7 @@
 
         paginaAtual = num;
         pageInput.value = num;
+        atualizarUrlPagina(paginaAtual);
         setStatus(`Página ${paginaAtual} de ${totalPaginas} • Zoom ${Math.round(escala * 100)}%`);
       } catch (err) {
         setErro('Falha ao renderizar a página: ' + (err?.message || err));
@@ -246,14 +307,50 @@
       filaOuRender(paginaAtual);
     };
 
-    window.abrirOriginal = function() {
-      window.open(pdfUrl, '_blank');
+    window.voltarCentral = function() {
+      if (window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+      window.location.href = "<?= baseUrl ?>";
     };
+
+    window.baixarPdf = function() {
+      if (!pdfBlobUrl) {
+        setErro('O PDF ainda não foi carregado.');
+        return;
+      }
+      const link = document.createElement('a');
+      link.href = pdfBlobUrl;
+      link.download = pdfFileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    };
+
+    function carregarPdfDoServidor() {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .getOiPdfData({ token: sessionToken, aeronave, oiKey });
+      });
+    }
 
     async function iniciar() {
       try {
         setStatus('Carregando PDF...');
-        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        const pdfjsLib = await carregarPdfJs();
+        const res = await carregarPdfDoServidor();
+        if (!res || !res.ok || !res.base64) {
+          throw new Error(res && res.msg ? res.msg : 'Falha ao obter o PDF da OI.');
+        }
+
+        const pdfBytes = base64ParaUint8Array(res.base64);
+        atualizarBlobOriginal(pdfBytes, res.mimeType);
+        pdfFileName = res.fileName || 'oi.pdf';
+
+        const loadingTask = pdfjsLib.getDocument({ data: pdfBytes, disableWorker: true });
         pdfDoc = await loadingTask.promise;
         totalPaginas = pdfDoc.numPages;
 
@@ -265,7 +362,14 @@
       }
     }
 
+    window.addEventListener('beforeunload', () => {
+      if (pdfBlobUrl) {
+        URL.revokeObjectURL(pdfBlobUrl);
+      }
+    });
+
     iniciar();
   </script>
 </body>
 </html>
+

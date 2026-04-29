@@ -1,4 +1,4 @@
-/***************
+﻿/***************
  * CONFIG GERAL
  ***************/
 const SHEET_CONFIG = 'CONFIG';
@@ -6,17 +6,21 @@ const SHEET_EFETIVO = 'EFETIVO';
 const SHEET_AVOPS = 'AVOPS';
 const SHEET_LEITURAS = 'LEITURAS';
 const SHEET_EMAIL_LOG = 'EMAIL_LOG';
+const SHEET_PENDENCIAS = 'PENDENCIAS';
+const SHEET_PENDENCIAS_RESUMO = 'PENDENCIAS_RESUMO';
 const SHEET_APRONTOS = 'APRONTOS';
 const SHEET_PRESENCAS = 'PRESENCAS';
 const SHEET_OI_H50 = 'OI_H50';
 const SHEET_OI_H125 = 'OI_H125';
+const SHEET_ACESSOS_LOG = 'ACESSOS_LOG';
 
 const COBRAR_APENAS_DENTRO_PRAZO = true;
 const INTERVALO_COBRANCA_DIAS = 7;
 const INTERVALO_ALERTA_CHEFE_DIAS = 7;
+const SESSION_DURATION_HOURS = 12;
 
 /************************
- * FUNÇÕES UTILITÁRIAS
+ * FUNCOES UTILITARIAS
  ************************/
 function normalize_(s) {
   return String(s ?? '').trim();
@@ -26,14 +30,30 @@ function normalizeUpper_(s) {
   return normalize_(s).toUpperCase();
 }
 
+function getBaseWebAppUrl_(fallbackUrl) {
+  const rawFallback = String(fallbackUrl || '').trim();
+  if (rawFallback) return rawFallback.replace(/\?.*$/, '');
+
+  try {
+    const current = String(ScriptApp.getService().getUrl() || '').trim();
+    if (current) return current.replace(/\?.*$/, '');
+  } catch (err) {}
+
+  try {
+    return getWebAppBaseUrl_();
+  } catch (err) {
+    return '';
+  }
+}
+
 function getTable_(sheetName) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(sheetName);
-  if (!sh) throw new Error(`Aba ${sheetName} não encontrada.`);
+  if (!sh) throw new Error(`Aba ${sheetName} nao encontrada.`);
 
   const values = sh.getDataRange().getValues();
   if (!values || values.length < 1) {
-    throw new Error(`Aba ${sheetName} está vazia.`);
+    throw new Error(`Aba ${sheetName} esta vazia.`);
   }
 
   return { sh, values, header: values[0] };
@@ -42,15 +62,19 @@ function getTable_(sheetName) {
 function findHeaderIndex_(headerRow, colName) {
   const idx = headerRow.indexOf(colName);
   if (idx === -1) {
-    throw new Error(`Coluna "${colName}" não encontrada. Verifique os cabeçalhos.`);
+    throw new Error(`Coluna "${colName}" nao encontrada. Verifique os cabecalhos.`);
   }
   return idx;
+}
+
+function findOptionalHeaderIndex_(headerRow, colName) {
+  return headerRow.indexOf(colName);
 }
 
 function getWebAppBaseUrl_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(SHEET_CONFIG);
-  if (!sh) throw new Error(`Aba ${SHEET_CONFIG} não encontrada.`);
+  if (!sh) throw new Error(`Aba ${SHEET_CONFIG} nao encontrada.`);
 
   const base = String(sh.getRange('B1').getValue()).trim();
   if (!base) {
@@ -91,17 +115,21 @@ function toDrivePreviewUrl_(url) {
   return s;
 }
 
+function extractDriveFileId_(url) {
+  const s = String(url || '').trim();
+  let m = s.match(/\/file\/d\/([^/]+)/);
+  if (!m) {
+    m = s.match(/[?&]id=([^&]+)/);
+  }
+  return m ? m[1] : '';
+}
+
 function toDriveDownloadUrl_(url) {
   const s = String(url || '').trim();
 
-  let m = s.match(/\/file\/d\/([^/]+)/);
-  if (m) {
-    return `https://drive.google.com/uc?export=download&id=${m[1]}`;
-  }
-
-  m = s.match(/[?&]id=([^&]+)/);
-  if (m) {
-    return `https://drive.google.com/uc?export=download&id=${m[1]}`;
+  const fileId = extractDriveFileId_(s);
+  if (fileId) {
+    return `https://drive.google.com/uc?export=download&id=${fileId}`;
   }
 
   return s;
@@ -121,751 +149,18 @@ function getFirstEmptyRow_(sheet, startRow, keyCol) {
   return lastRow + 1;
 }
 
-function perfilAlvoIncluiPerfil_(perfilAlvo, perfilPessoa) {
-  const alvo = normalizeUpper_(perfilAlvo);
-  const perfil = normalizeUpper_(perfilPessoa);
 
-  if (!alvo) return false;
-  if (alvo === 'TODOS') return true;
+/* app flows moved to Auth.gs, Avops.gs, Oi.gs, Aprontos.gs and WebApp.gs */
 
-  const alvos = alvo.split(',').map(s => s.trim()).filter(Boolean);
-  return alvos.includes(perfil);
-}
-
-function publicoIncluiPerfil_(publico, perfil) {
-  const pub = normalizeUpper_(publico);
-  const perf = normalizeUpper_(perfil);
-
-  if (!pub) return false;
-  if (pub === 'TODOS') return true;
-
-  const pubs = pub.split(',').map(s => s.trim()).filter(Boolean);
-  return pubs.includes(perf);
-}
-
-function calcularStatusFinal_(status, cienciaMaterial) {
-  const st = normalizeUpper_(status);
-  const cm = normalizeUpper_(cienciaMaterial);
-
-  if (st === 'PRESENTE') return 'PRESENTE';
-  if (st === 'JUSTIFICADO') return cm === 'SIM' ? 'JUSTIFICADO COM CIÊNCIA' : 'JUSTIFICADO SEM CIÊNCIA';
-  if (st === 'AUSENTE') return 'AUSENTE';
-  return 'PENDENTE';
-}
-
-function validarIdAtivo_(id) {
-  const { values: ef, header: eh } = getTable_(SHEET_EFETIVO);
-  const e_id = findHeaderIndex_(eh, 'ID');
-  const e_ativo = findHeaderIndex_(eh, 'ATIVO');
-
-  for (let i = 1; i < ef.length; i++) {
-    if (normalizeUpper_(ef[i][e_id]) === id) {
-      return {
-        ok: true,
-        ativo: normalizeUpper_(ef[i][e_ativo]) === 'SIM'
-      };
-    }
-  }
-
-  return { ok: false, ativo: false };
-}
-
-function getPerfilEfetivo_(idUpper) {
-  const { values: ef, header: eh } = getTable_(SHEET_EFETIVO);
-  const e_id = findHeaderIndex_(eh, 'ID');
-  const e_ativo = findHeaderIndex_(eh, 'ATIVO');
-  const e_perfil = findHeaderIndex_(eh, 'PERFIL');
-
-  for (let i = 1; i < ef.length; i++) {
-    if (normalizeUpper_(ef[i][e_id]) === idUpper) {
-      return {
-        ok: true,
-        ativo: normalizeUpper_(ef[i][e_ativo]) === 'SIM',
-        perfil: normalizeUpper_(ef[i][e_perfil])
-      };
-    }
-  }
-
-  return { ok: false, ativo: false, perfil: '' };
-}
-
-function getOiSheetName_(aeronave) {
-  const aero = normalizeUpper_(aeronave);
-
-  if (aero === 'H50') return SHEET_OI_H50;
-  if (aero === 'H125') return SHEET_OI_H125;
-
-  throw new Error('Aeronave inválida para busca de OI.');
-}
-
-function extractOiCodigo_(oiKey) {
-  const parts = normalizeUpper_(oiKey).split('|').map(s => s.trim()).filter(Boolean);
-  return parts.length >= 3 ? parts[2] : '';
-}
-
-function buildOiViewerUrl_(pdfUrl, pagInicial) {
-  const s = String(pdfUrl || '').trim();
-  const page = Number(pagInicial || 1);
-
-  let m = s.match(/\/file\/d\/([^/]+)/);
-  if (!m) {
-    m = s.match(/[?&]id=([^&]+)/);
-  }
-
-  if (m) {
-    const fileId = m[1];
-    return `https://drive.google.com/file/d/${fileId}/preview?rm=minimal#page=${page}`;
-  }
-
-  return `${s}#page=${page}`;
-}
-
-function matchOiCodigo_(codigoBusca, codigoBase) {
-  const busca = normalizeUpper_(codigoBusca).replace(/[^A-Z0-9]/g, '');
-  const base = normalizeUpper_(codigoBase).replace(/[^A-Z0-9]/g, '');
-
-  if (!busca || !base) return { ok: false, score: 999 };
-
-  if (base === busca) return { ok: true, score: 0 };
-  if (base.startsWith(busca)) return { ok: true, score: 1 };
-
-  if (
-    busca.length >= 6 &&
-    base.startsWith(busca.slice(0, 4)) &&
-    base.endsWith(busca.slice(-2))
-  ) {
-    return { ok: true, score: 2 };
-  }
-
-  if (base.includes(busca)) return { ok: true, score: 3 };
-
-  return { ok: false, score: 999 };
-}
-
-function getCentralOI(params) {
-  const id = normalizeUpper_(params?.id);
-  const codigo = normalizeUpper_(params?.codigo).replace(/[^A-Z0-9]/g, '');
-  const aeronave = normalizeUpper_(params?.aeronave);
-
-  if (!id) return { ok: false, msg: 'Informe Trigrama.', items: [] };
-  if (!codigo) return { ok: false, msg: 'Informe o código da OI.', items: [] };
-  if (codigo.length < 4 || codigo.length > 9) {
-    return { ok: false, msg: 'O código da OI deve ter entre 4 e 9 caracteres.', items: [] };
-  }
-  if (!aeronave) return { ok: false, msg: 'Selecione a aeronave.', items: [] };
-
-  const v = validarIdAtivo_(id);
-  if (!v.ok) return { ok: false, msg: 'Trigrama não encontrado no efetivo.', items: [] };
-  if (!v.ativo) return { ok: false, msg: 'Trigrama consta como INATIVO.', items: [] };
-
-  let table;
-  try {
-    table = getTable_(getOiSheetName_(aeronave));
-  } catch (err) {
-    return { ok: false, msg: `Aba de OI da aeronave ${aeronave} não encontrada.`, items: [] };
-  }
-
-  const oiVals = table.values;
-  const oh = table.header;
-
-  const o_key = findHeaderIndex_(oh, 'OI_KEY');
-  const o_programa = findHeaderIndex_(oh, 'PROGRAMA');
-  const o_subprograma = findHeaderIndex_(oh, 'SUBPROGRAMA');
-  const o_fase = findHeaderIndex_(oh, 'FASE_ID');
-  const o_titulo = findHeaderIndex_(oh, 'TITULO');
-  const o_pdf = findHeaderIndex_(oh, 'PDF_URL');
-  const o_pagIni = findHeaderIndex_(oh, 'PAG_INICIAL');
-  const o_pagFim = findHeaderIndex_(oh, 'PAG_FINAL');
-  const o_tipo = findHeaderIndex_(oh, 'TIPO');
-  const o_status = findHeaderIndex_(oh, 'STATUS');
-  const o_chave = findHeaderIndex_(oh, 'CHAVE_EXIBICAO');
-
-  const items = [];
-
-  for (let i = 1; i < oiVals.length; i++) {
-    const oiKey = normalize_(oiVals[i][o_key]);
-    const status = normalizeUpper_(oiVals[i][o_status]);
-    const pdfUrl = normalize_(oiVals[i][o_pdf]);
-    const pagInicial = Number(oiVals[i][o_pagIni] || 0);
-
-    if (!oiKey) continue;
-    if (status !== 'ATIVO') continue;
-    if (!pdfUrl) continue;
-    if (!pagInicial) continue;
-
-    const codigoBase = extractOiCodigo_(oiKey);
-    const match = matchOiCodigo_(codigo, codigoBase);
-    if (!match.ok) continue;
-
-    items.push({
-      aeronave,
-      oiKey,
-      programa: normalize_(oiVals[i][o_programa]),
-      subprograma: normalize_(oiVals[i][o_subprograma]),
-      faseId: normalize_(oiVals[i][o_fase]),
-      titulo: normalize_(oiVals[i][o_titulo]),
-      pagInicial,
-      pagFinal: Number(oiVals[i][o_pagFim] || 0),
-      tipo: normalize_(oiVals[i][o_tipo]),
-      chaveExibicao: normalize_(oiVals[i][o_chave]),
-      viewerUrl: buildOiViewerUrl_(pdfUrl, pagInicial),
-      score: match.score
-    });
-  }
-
-  items.sort((a, b) => {
-    if (a.score !== b.score) return a.score - b.score;
-    return a.oiKey.localeCompare(b.oiKey);
-  });
-
-  const cleanItems = items.map(({ score, ...rest }) => rest);
-
-  return { ok: true, items: cleanItems };
-}
-function getOiByKey_(aeronave, oiKey) {
-  const sheetName = getOiSheetName_(aeronave);
-  const { values, header } = getTable_(sheetName);
-
-  const o_key = findHeaderIndex_(header, 'OI_KEY');
-  const o_programa = findHeaderIndex_(header, 'PROGRAMA');
-  const o_subprograma = findHeaderIndex_(header, 'SUBPROGRAMA');
-  const o_fase = findHeaderIndex_(header, 'FASE_ID');
-  const o_titulo = findHeaderIndex_(header, 'TITULO');
-  const o_pdf = findHeaderIndex_(header, 'PDF_URL');
-  const o_pagIni = findHeaderIndex_(header, 'PAG_INICIAL');
-  const o_pagFim = findHeaderIndex_(header, 'PAG_FINAL');
-  const o_tipo = findHeaderIndex_(header, 'TIPO');
-  const o_status = findHeaderIndex_(header, 'STATUS');
-  const o_chave = findHeaderIndex_(header, 'CHAVE_EXIBICAO');
-
-  const alvo = normalize_(oiKey);
-
-  for (let i = 1; i < values.length; i++) {
-    const rowKey = normalize_(values[i][o_key]);
-    if (rowKey !== alvo) continue;
-
-    const status = normalizeUpper_(values[i][o_status]);
-    if (status !== 'ATIVO') {
-      throw new Error(`OI encontrada, mas não está ATIVA: ${alvo}`);
-    }
-
-    return {
-      aeronave: normalizeUpper_(aeronave),
-      oiKey: rowKey,
-      programa: normalize_(values[i][o_programa]),
-      subprograma: normalize_(values[i][o_subprograma]),
-      faseId: normalize_(values[i][o_fase]),
-      titulo: normalize_(values[i][o_titulo]),
-      pdfUrl: normalize_(values[i][o_pdf]),
-      pagInicial: Number(values[i][o_pagIni] || 1),
-      pagFinal: Number(values[i][o_pagFim] || 0),
-      tipo: normalize_(values[i][o_tipo]),
-      chaveExibicao: normalize_(values[i][o_chave])
-    };
-  }
-
-  throw new Error(`OI não encontrada: ${alvo}`);
-}
-
-function renderOiViewerPage_(aeronave, oiKey) {
-  const oi = getOiByKey_(aeronave, oiKey);
-
-  if (!oi.pdfUrl) {
-    return HtmlService.createHtmlOutput('OI sem PDF_URL preenchida.');
-  }
-
-  const t = HtmlService.createTemplateFromFile('OiViewer');
-  t.aeronave = oi.aeronave;
-  t.oiKey = oi.oiKey;
-  t.programa = oi.programa;
-  t.subprograma = oi.subprograma;
-  t.faseId = oi.faseId;
-  t.titulo = oi.titulo;
-  t.pdfUrl = buildOiPdfJsUrl_(oi.pdfUrl);
-  t.pagInicial = oi.pagInicial;
-  t.pagFinal = oi.pagFinal;
-  t.tipo = oi.tipo;
-  t.chaveExibicao = oi.chaveExibicao;
-
-  return t.evaluate()
-    .setTitle(`OI Viewer - ${oi.oiKey}`)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
-
-function buildOiViewerPageUrl_(baseUrl, aeronave, oiKey) {
-  return `${baseUrl}?oiviewer=1&aeronave=${encodeURIComponent(aeronave)}&oi=${encodeURIComponent(oiKey)}`;
-}
-
-/************************
- * WEB APP
- ************************/
-function doGet(e) {
-  const avopIdParam = normalize_(e?.parameter?.avop);
-  const aprontoIdParam = normalize_(e?.parameter?.apronto);
-  const oiViewerParam = normalize_(e?.parameter?.oiviewer);
-  const oiViewerAeronave = normalizeUpper_(e?.parameter?.aeronave);
-  const oiViewerKey = normalize_(e?.parameter?.oi);
-
-  // 0) OI VIEWER
-  if (oiViewerParam === '1') {
-    try {
-      return renderOiViewerPage_(oiViewerAeronave, oiViewerKey);
-    } catch (err) {
-      return HtmlService.createHtmlOutput(
-        `Erro ao abrir o visualizador da OI: ${String(err.message || err)}`
-      );
-    }
-  }
-
-  // 1) AVOP INDIVIDUAL
-  if (avopIdParam) {
-    return renderAvopPage_(avopIdParam);
-  }
-
-  // 2) APRONTO INDIVIDUAL
-  if (aprontoIdParam) {
-    return renderAprontoPage_(aprontoIdParam);
-  }
-
-  // 3) PORTAL
-  const t = HtmlService.createTemplateFromFile('Portal');
-  t.baseUrl = ScriptApp.getService().getUrl();
-
-  return t.evaluate()
-    .setTitle('Central Operacional')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
-/*************************
- * AVOPS
- *************************/
-function registrarLeitura(payload) {
-  const avopId = normalize_(payload?.avopId);
-  const id = normalizeUpper_(payload?.id);
-  const nomeInformado = normalize_(payload?.nome);
-
-  if (!avopId || !id) {
-    return { ok: false, msg: 'Informe AVOP e Trigrama.' };
-  }
-
-  const validacao = validarIdAtivo_(id);
-  if (!validacao.ok) return { ok: false, msg: 'Trigrama não encontrado no efetivo.' };
-  if (!validacao.ativo) return { ok: false, msg: 'Trigrama consta como INATIVO.' };
-
-  const { sh: leitSh, values: leitVals, header: lh } = getTable_(SHEET_LEITURAS);
-  const l_av = findHeaderIndex_(lh, 'AVOP_ID');
-  const l_id = findHeaderIndex_(lh, 'ID');
-
-  for (let i = 1; i < leitVals.length; i++) {
-    if (
-      normalize_(leitVals[i][l_av]) === avopId &&
-      normalizeUpper_(leitVals[i][l_id]) === id
-    ) {
-      return { ok: true, msg: 'Leitura já registrada. Abrindo AVOP...' };
-    }
-  }
-
-  leitSh.appendRow([new Date(), avopId, id, nomeInformado, '', '']);
-  SpreadsheetApp.flush();
-
-  return { ok: true, msg: 'Leitura registrada. Abrindo AVOP...' };
-}
-
-function getCentralData(params) {
-  const id = normalizeUpper_(params?.id);
-  const statusFiltro = normalizeUpper_(params?.status || 'PENDENTE');
-  const busca = normalize_(params?.busca || '').toLowerCase();
-  const dias = Number(params?.dias || 90);
-
-  if (!id) return { ok: false, msg: 'Informe Trigrama.', items: [] };
-
-  const v = getPerfilEfetivo_(id);
-  if (!v.ok) return { ok: false, msg: 'Trigrama não encontrado no efetivo.', items: [] };
-  if (!v.ativo) return { ok: false, msg: 'Trigrama consta como INATIVO.', items: [] };
-  if (!v.perfil) return { ok: false, msg: 'PERFIL não definido para este Trigrama.', items: [] };
-
-  const { values: leituras, header: lh } = getTable_(SHEET_LEITURAS);
-  const l_av = findHeaderIndex_(lh, 'AVOP_ID');
-  const l_id = findHeaderIndex_(lh, 'ID');
-
-  const lidas = new Set();
-  for (let i = 1; i < leituras.length; i++) {
-    lidas.add(`${normalize_(leituras[i][l_av])}|${normalizeUpper_(leituras[i][l_id])}`);
-  }
-
-  const { values: avops, header: ah } = getTable_(SHEET_AVOPS);
-  const a_id = findHeaderIndex_(ah, 'AVOP_ID');
-  const a_titulo = findHeaderIndex_(ah, 'TITULO');
-  const a_data = findHeaderIndex_(ah, 'DATA_EMISSAO');
-  const a_prazo = findHeaderIndex_(ah, 'PRAZO_DIAS');
-  const a_status = findHeaderIndex_(ah, 'STATUS');
-  const a_perfil = findHeaderIndex_(ah, 'PERFIL_ALVO');
-  const a_exige = findHeaderIndex_(ah, 'EXIGE_CIENCIA');
-
-  const hoje = new Date();
-  const limite = new Date();
-  limite.setDate(limite.getDate() - dias);
-
-  const items = [];
-
-  for (let i = 1; i < avops.length; i++) {
-    const avopId = normalize_(avops[i][a_id]);
-    const titulo = normalize_(avops[i][a_titulo]);
-    const dataEmissaoRaw = avops[i][a_data];
-    const prazoDias = Number(avops[i][a_prazo] || 30);
-    const statusAvop = normalizeUpper_(avops[i][a_status]);
-    const perfilAlvo = normalizeUpper_(avops[i][a_perfil]);
-    const exigeCiencia = normalizeUpper_(avops[i][a_exige]);
-
-    if (!avopId || !dataEmissaoRaw) continue;
-    if (statusAvop !== 'ATIVO') continue;
-    if (exigeCiencia !== 'SIM') continue;
-    if (!perfilAlvoIncluiPerfil_(perfilAlvo, v.perfil)) continue;
-
-    const dt = new Date(dataEmissaoRaw);
-    if (dt < limite) continue;
-
-    const venc = new Date(dt);
-    venc.setDate(venc.getDate() + prazoDias);
-
-    const key = `${avopId}|${id}`;
-    const ciente = lidas.has(key);
-    const status = ciente ? 'CIENTE' : 'PENDENTE';
-    const atrasado = !ciente && hoje > venc;
-
-    if (statusFiltro !== 'TODOS' && status !== statusFiltro) continue;
-
-    if (busca) {
-      const hay = (avopId + ' ' + titulo).toLowerCase();
-      if (!hay.includes(busca)) continue;
-    }
-
-    items.push({
-      avopId,
-      titulo,
-      dataEmissaoBR: dt.toLocaleDateString('pt-BR'),
-      vencimentoBR: venc.toLocaleDateString('pt-BR'),
-      status,
-      atrasado,
-      dataISO: dt.toISOString()
-    });
-  }
-
-  return {
-    ok: true,
-    items,
-    total: items.length,
-    pendentes: items.filter(x => x.status === 'PENDENTE').length,
-    vencidos: items.filter(x => x.status === 'PENDENTE' && x.atrasado).length
-  };
-}
-function buildOiPdfJsUrl_(pdfUrl) {
-  const s = String(pdfUrl || '').trim();
-
-  let m = s.match(/\/file\/d\/([^/]+)/);
-  if (!m) {
-    m = s.match(/[?&]id=([^&]+)/);
-  }
-
-  if (m) {
-    const fileId = m[1];
-    return `https://drive.google.com/uc?export=download&id=${fileId}`;
-  }
-
-  return s;
-}
-
-/*************************
- * APRONTOS
- *************************/
-function registrarPresenca(payload) {
-  const aprontoId = normalize_(payload?.aprontoId);
-  const id = normalizeUpper_(payload?.id);
-
-  if (!aprontoId || !id) {
-    return { ok: false, msg: 'Informe apronto e Trigrama.' };
-  }
-
-  const v = validarIdAtivo_(id);
-  if (!v.ok) return { ok: false, msg: 'Trigrama não encontrado no efetivo.' };
-  if (!v.ativo) return { ok: false, msg: 'Trigrama consta como INATIVO.' };
-
-  const statusApronto = getStatusApronto_(aprontoId);
-  if (!statusApronto) return { ok: false, msg: 'Apronto não encontrado.' };
-  if (statusApronto === 'FECHADO') return { ok: false, msg: 'Apronto fechado para registro de presença.' };
-
-  const { sh: prSh, values: pr, header: ph } = getTable_(SHEET_PRESENCAS);
-  const p_ts = findHeaderIndex_(ph, 'TIMESTAMP');
-  const p_ap = findHeaderIndex_(ph, 'APRONTO_ID');
-  const p_id = findHeaderIndex_(ph, 'ID');
-  const p_st = findHeaderIndex_(ph, 'STATUS');
-  const p_obs = findHeaderIndex_(ph, 'OBS');
-
-  let p_final = -1;
-  try {
-    p_final = findHeaderIndex_(ph, 'STATUS_FINAL');
-  } catch (e) {
-    p_final = -1;
-  }
-
-  for (let i = 1; i < pr.length; i++) {
-    if (
-      normalize_(pr[i][p_ap]) === aprontoId &&
-      normalizeUpper_(pr[i][p_id]) === id
-    ) {
-      prSh.getRange(i + 1, p_ts + 1).setValue(new Date());
-      prSh.getRange(i + 1, p_st + 1).setValue('PRESENTE');
-      prSh.getRange(i + 1, p_obs + 1).setValue('');
-
-      if (p_final >= 0) {
-        prSh.getRange(i + 1, p_final + 1).setValue(calcularStatusFinal_('PRESENTE', ''));
-      }
-
-      SpreadsheetApp.flush();
-      return { ok: true, msg: 'Presença registrada/atualizada.' };
-    }
-  }
-
-  const novaLinha = Array(ph.length).fill('');
-  novaLinha[p_ts] = new Date();
-  novaLinha[p_ap] = aprontoId;
-  novaLinha[p_id] = id;
-  novaLinha[p_st] = 'PRESENTE';
-  novaLinha[p_obs] = '';
-  if (p_final >= 0) novaLinha[p_final] = calcularStatusFinal_('PRESENTE', '');
-
-  const novaLinhaNum = getFirstEmptyRow_(prSh, 2, 2);
-  prSh.getRange(novaLinhaNum, 1, 1, novaLinha.length).setValues([novaLinha]);
-  SpreadsheetApp.flush();
-
-  return { ok: true, msg: 'Presença registrada.' };
-}
-
-function justificarAusencia(payload) {
-  const aprontoId = normalize_(payload?.aprontoId);
-  const id = normalizeUpper_(payload?.id);
-  const obs = normalize_(payload?.obs || 'escala');
-
-  if (!aprontoId || !id) {
-    return { ok: false, msg: 'Informe apronto e Trigrama.' };
-  }
-
-  const v = validarIdAtivo_(id);
-  if (!v.ok) return { ok: false, msg: 'Trigrama não encontrado no efetivo.' };
-  if (!v.ativo) return { ok: false, msg: 'Trigrama consta como INATIVO.' };
-
-  const statusApronto = getStatusApronto_(aprontoId);
-  if (!statusApronto) return { ok: false, msg: 'Apronto não encontrado.' };
-  if (statusApronto === 'FECHADO') return { ok: false, msg: 'Apronto fechado para justificativa.' };
-
-  const { sh: prSh, values: pr, header: ph } = getTable_(SHEET_PRESENCAS);
-  const p_ts = findHeaderIndex_(ph, 'TIMESTAMP');
-  const p_ap = findHeaderIndex_(ph, 'APRONTO_ID');
-  const p_id = findHeaderIndex_(ph, 'ID');
-  const p_st = findHeaderIndex_(ph, 'STATUS');
-  const p_obs = findHeaderIndex_(ph, 'OBS');
-  const p_ciencia = findHeaderIndex_(ph, 'CIENCIA_MATERIAL');
-  const p_final = findHeaderIndex_(ph, 'STATUS_FINAL');
-
-  for (let i = 1; i < pr.length; i++) {
-    if (
-      normalize_(pr[i][p_ap]) === aprontoId &&
-      normalizeUpper_(pr[i][p_id]) === id
-    ) {
-      const cienciaAtual = normalize_(pr[i][p_ciencia] || '');
-
-      prSh.getRange(i + 1, p_ts + 1).setValue(new Date());
-      prSh.getRange(i + 1, p_st + 1).setValue('JUSTIFICADO');
-      prSh.getRange(i + 1, p_obs + 1).setValue(obs);
-      prSh.getRange(i + 1, p_final + 1).setValue(calcularStatusFinal_('JUSTIFICADO', cienciaAtual));
-      SpreadsheetApp.flush();
-
-      return { ok: true, msg: 'Justificativa registrada.' };
-    }
-  }
-
-  const novaLinha = Array(ph.length).fill('');
-  novaLinha[p_ts] = new Date();
-  novaLinha[p_ap] = aprontoId;
-  novaLinha[p_id] = id;
-  novaLinha[p_st] = 'JUSTIFICADO';
-  novaLinha[p_obs] = obs;
-  novaLinha[p_final] = calcularStatusFinal_('JUSTIFICADO', '');
-
-  const novaLinhaNum = getFirstEmptyRow_(prSh, 2, 2);
-  prSh.getRange(novaLinhaNum, 1, 1, novaLinha.length).setValues([novaLinha]);
-  SpreadsheetApp.flush();
-
-  return { ok: true, msg: 'Justificativa registrada.' };
-}
-
-function registrarCienciaMaterial(payload) {
-  const aprontoId = normalize_(payload?.aprontoId);
-  const id = normalizeUpper_(payload?.id);
-
-  if (!aprontoId || !id) {
-    return { ok: false, msg: 'Informe apronto e Trigrama.' };
-  }
-
-  const v = validarIdAtivo_(id);
-  if (!v.ok) return { ok: false, msg: 'Trigrama não encontrado no efetivo.' };
-  if (!v.ativo) return { ok: false, msg: 'Trigrama consta como INATIVO.' };
-
-  const { sh: prSh, values: pr, header: ph } = getTable_(SHEET_PRESENCAS);
-  const p_ts = findHeaderIndex_(ph, 'TIMESTAMP');
-  const p_ap = findHeaderIndex_(ph, 'APRONTO_ID');
-  const p_id = findHeaderIndex_(ph, 'ID');
-  const p_st = findHeaderIndex_(ph, 'STATUS');
-  const p_obs = findHeaderIndex_(ph, 'OBS');
-  const p_ciencia = findHeaderIndex_(ph, 'CIENCIA_MATERIAL');
-  const p_dataCiencia = findHeaderIndex_(ph, 'DATA_CIENCIA_MATERIAL');
-  const p_final = findHeaderIndex_(ph, 'STATUS_FINAL');
-
-  for (let i = 1; i < pr.length; i++) {
-    if (
-      normalize_(pr[i][p_ap]) === aprontoId &&
-      normalizeUpper_(pr[i][p_id]) === id
-    ) {
-      const statusAtual = normalize_(pr[i][p_st] || '');
-
-      prSh.getRange(i + 1, p_ciencia + 1).setValue('SIM');
-      prSh.getRange(i + 1, p_dataCiencia + 1).setValue(new Date());
-      prSh.getRange(i + 1, p_final + 1).setValue(calcularStatusFinal_(statusAtual, 'SIM'));
-      SpreadsheetApp.flush();
-
-      return { ok: true, msg: 'Ciência do material registrada.' };
-    }
-  }
-
-  const novaLinha = Array(ph.length).fill('');
-  novaLinha[p_ts] = new Date();
-  novaLinha[p_ap] = aprontoId;
-  novaLinha[p_id] = id;
-  novaLinha[p_st] = '';
-  novaLinha[p_obs] = '';
-  novaLinha[p_ciencia] = 'SIM';
-  novaLinha[p_dataCiencia] = new Date();
-  novaLinha[p_final] = calcularStatusFinal_('', 'SIM');
-
-  const novaLinhaNum = getFirstEmptyRow_(prSh, 2, 2);
-  prSh.getRange(novaLinhaNum, 1, 1, novaLinha.length).setValues([novaLinha]);
-  SpreadsheetApp.flush();
-
-  return { ok: true, msg: 'Ciência do material registrada.' };
-}
-
-function getCentralAprontos(params) {
-  const id = normalizeUpper_(params?.id);
-  const dias = Number(params?.dias || 90);
-  const statusFiltro = normalizeUpper_(params?.status || 'ABERTOS');
-  const busca = normalize_(params?.busca || '').toLowerCase();
-
-  if (!id) return { ok: false, msg: 'Informe Trigrama.', items: [] };
-
-  const v = getPerfilEfetivo_(id);
-  if (!v.ok) return { ok: false, msg: 'Trigrama não encontrado no efetivo.', items: [] };
-  if (!v.ativo) return { ok: false, msg: 'Trigrama consta como INATIVO.', items: [] };
-  if (!v.perfil) return { ok: false, msg: 'PERFIL não definido para este Trigrama.', items: [] };
-
-  const { values: pr, header: ph } = getTable_(SHEET_PRESENCAS);
-  const p_ap = findHeaderIndex_(ph, 'APRONTO_ID');
-  const p_id = findHeaderIndex_(ph, 'ID');
-  const p_st = findHeaderIndex_(ph, 'STATUS');
-  const p_ciencia = findHeaderIndex_(ph, 'CIENCIA_MATERIAL');
-
-  const meuStatus = new Map();
-  const minhaCiencia = new Map();
-
-  for (let i = 1; i < pr.length; i++) {
-    if (normalizeUpper_(pr[i][p_id]) === id) {
-      const aprId = normalize_(pr[i][p_ap]);
-      meuStatus.set(aprId, normalizeUpper_(pr[i][p_st]));
-      minhaCiencia.set(aprId, normalizeUpper_(pr[i][p_ciencia]) === 'SIM' ? 'SIM' : '');
-    }
-  }
-
-  const { values: ap, header: ah } = getTable_(SHEET_APRONTOS);
-  const a_id = findHeaderIndex_(ah, 'APRONTO_ID');
-  const a_titulo = findHeaderIndex_(ah, 'TITULO');
-  const a_data = findHeaderIndex_(ah, 'DATA');
-  const a_publico = findHeaderIndex_(ah, 'PUBLICO');
-  const a_status = findHeaderIndex_(ah, 'STATUS');
-  const a_exige = findHeaderIndex_(ah, 'EXIGE_CIENCIA_MATERIAL');
-  const a_link = findHeaderIndex_(ah, 'LINK_MATERIAL');
-
-  const limite = new Date();
-  limite.setDate(limite.getDate() - dias);
-
-  const items = [];
-
-  for (let i = 1; i < ap.length; i++) {
-    const aprontoId = normalize_(ap[i][a_id]);
-    const titulo = normalize_(ap[i][a_titulo]);
-    const dataRaw = ap[i][a_data];
-    const publico = normalizeUpper_(ap[i][a_publico]);
-    const statusApr = normalizeUpper_(ap[i][a_status]);
-    const exigeCienciaMaterial = normalizeUpper_(ap[i][a_exige]);
-    const linkMaterial = normalize_(ap[i][a_link]);
-
-    if (!aprontoId || !dataRaw) continue;
-
-    const dt = new Date(dataRaw);
-    if (dt < limite) continue;
-
-    if (statusFiltro === 'ABERTOS' && statusApr !== 'ABERTO') continue;
-    if (statusFiltro === 'FECHADOS' && statusApr !== 'FECHADO') continue;
-    if (!publicoIncluiPerfil_(publico, v.perfil)) continue;
-
-    if (busca) {
-      const hay = (aprontoId + ' ' + titulo).toLowerCase();
-      if (!hay.includes(busca)) continue;
-    }
-
-    const statusUsuario = meuStatus.get(aprontoId) || 'PENDENTE';
-    const cienciaMaterial = minhaCiencia.get(aprontoId) || '';
-
-    items.push({
-      aprontoId,
-      titulo,
-      dataBR: dt.toLocaleDateString('pt-BR'),
-      publico,
-      statusApronto: statusApr,
-      statusUsuario,
-      cienciaMaterial,
-      exigeCienciaMaterial,
-      possuiMaterial: !!linkMaterial,
-      dataISO: dt.toISOString()
-    });
-  }
-
-  const pendentes = items.filter(
-    x => x.statusApronto === 'ABERTO' && x.statusUsuario === 'PENDENTE'
-  ).length;
-
-  return { ok: true, items, pendentes };
-}
-
-function getStatusApronto_(aprontoId) {
-  const { values: ap, header: ah } = getTable_(SHEET_APRONTOS);
-  const a_id = findHeaderIndex_(ah, 'APRONTO_ID');
-  const a_status = findHeaderIndex_(ah, 'STATUS');
-
-  for (let i = 1; i < ap.length; i++) {
-    if (normalize_(ap[i][a_id]) === aprontoId) {
-      return normalizeUpper_(ap[i][a_status]);
-    }
-  }
-
-  return '';
-}
-
-/****************************************
- * GERAÇÃO DE WEBAPP_URL
- ****************************************/
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('AVOPS')
     .addItem('Gerar WEBAPP_URL (lote)', 'gerarWebAppUrlsEmLote')
-    .addItem('Testar cobrança (manual)', 'cobrarPendentesDiario')
+    .addItem('Preparar coluna PERFIS no EFETIVO', 'prepararEfetivoPerfis')
+    .addItem('Atualizar pendencias AVOP', 'atualizarPendenciasAvops')
+    .addItem('Criar botao de divulgacao', 'criarBotaoDivulgacaoAvop')
+    .addItem('Divulgar AVOP selecionado', 'divulgarAvopSelecionado')
+    .addItem('Testar cobranca (manual)', 'cobrarPendentesDiario')
     .addToUi();
 }
 
@@ -916,7 +211,7 @@ function gerarWebAppUrlsEmLote() {
 }
 
 /******************************
- * COBRANÇA AUTOMÁTICA
+ * COBRANCA AUTOMATICA
  ******************************/
 function cobrarPendentesDiario() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -926,7 +221,7 @@ function cobrarPendentesDiario() {
   const { values: leituras, header: lh } = getTable_(SHEET_LEITURAS);
 
   const logSh = ss.getSheetByName(SHEET_EMAIL_LOG);
-  if (!logSh) throw new Error(`Aba ${SHEET_EMAIL_LOG} não encontrada.`);
+  if (!logSh) throw new Error(`Aba ${SHEET_EMAIL_LOG} nao encontrada.`);
 
   const logValues = logSh.getDataRange().getValues();
   const logHeader = logValues[0];
@@ -935,8 +230,6 @@ function cobrarPendentesDiario() {
   const e_nome = findHeaderIndex_(eh, 'NOME');
   const e_email = findHeaderIndex_(eh, 'EMAIL');
   const e_ativo = findHeaderIndex_(eh, 'ATIVO');
-  const e_perfil = findHeaderIndex_(eh, 'PERFIL');
-
   const a_id = findHeaderIndex_(ah, 'AVOP_ID');
   const a_titulo = findHeaderIndex_(ah, 'TITULO');
   const a_data = findHeaderIndex_(ah, 'DATA_EMISSAO');
@@ -951,7 +244,7 @@ function cobrarPendentesDiario() {
 
   const lidas = new Set();
   for (let i = 1; i < leituras.length; i++) {
-    const key = `${normalize_(leituras[i][l_av])}|${normalizeUpper_(leituras[i][l_id])}`;
+    const key = `${normalizarAvopIdParaComparacao_(leituras[i][l_av])}|${normalizeUpper_(leituras[i][l_id])}`;
     lidas.add(key);
   }
 
@@ -987,39 +280,290 @@ function cobrarPendentesDiario() {
       const id = normalizeUpper_(efetivo[j][e_id]);
       const nome = normalize_(efetivo[j][e_nome]);
       const email = normalize_(efetivo[j][e_email]);
-      const perfilUsuario = normalizeUpper_(efetivo[j][e_perfil]);
+      const perfilUsuario = getPerfisFromEfetivoRow_(eh, efetivo[j]);
 
       if (!id || !email) continue;
       if (!perfilAlvoIncluiPerfil_(perfilAlvo, perfilUsuario)) continue;
 
-      const key = `${avopId}|${id}`;
+      const key = `${normalizarAvopIdParaComparacao_(avopId)}|${id}`;
       if (lidas.has(key)) continue;
 
       if (marcoJaCobrado_(logValues, logHeader, avopId, id, 'LEMBRETE', marco)) continue;
 
-      const assunto = `Pendência de ciência (AVOP): ${avopId}`;
-      const corpo =
-`Caro Tripulante,
-
-consta como pendente a ciência do seguinte AVOP:
-
-${avopId} — ${titulo}
-
-Para registrar sua ciência, acesse o link abaixo e informe seu TRIGRAMA:
-
-${webUrl}
-
-Este é um lembrete automático do sistema de controle de AVOPs.
-`;
+      const emailData = buildAvopEmailData_(avopId, titulo, webUrl, id, 'LEMBRETE');
 
       try {
-        GmailApp.sendEmail(email, assunto, corpo);
+        GmailApp.sendEmail(email, emailData.assunto, emailData.corpo, getCobrancaEmailOptions_());
         logSh.appendRow([new Date(), avopId, id, email, 'LEMBRETE', 'ENVIADO', `MARCO_${marco}`]);
       } catch (err) {
         logSh.appendRow([new Date(), avopId, id, email, 'LEMBRETE', 'ERRO', `MARCO_${marco} | ${String(err)}`]);
       }
     }
   }
+}
+
+function divulgarAvopSelecionado() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getActiveSheet();
+  if (!sh || sh.getName() !== SHEET_AVOPS) {
+    throw new Error(`Abra a aba ${SHEET_AVOPS} e selecione uma linha de AVOP antes de executar.`);
+  }
+
+  const row = sh.getActiveRange().getRow();
+  if (row < 2) throw new Error('Selecione uma linha de AVOP, nao o cabecalho.');
+
+  return divulgarAvopPorLinha_(row);
+}
+
+function criarBotaoDivulgacaoAvop() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEET_AVOPS);
+  if (!sh) throw new Error(`Aba ${SHEET_AVOPS} nao encontrada.`);
+
+  ss.setActiveSheet(sh);
+  sh.setFrozenRows(1);
+  sh.setColumnWidth(11, 190);
+  sh.setColumnWidth(12, 190);
+  sh.getImages().forEach(image => {
+    const anchor = image.getAnchorCell();
+    if (anchor.getColumn() >= 11 && anchor.getColumn() <= 12 && anchor.getRow() <= 3) {
+      image.remove();
+    }
+  });
+  sh.getRange('K1:L3').breakApart();
+  sh.getRange('K1:L3').clearContent().clearNote();
+  sh.getRange('K1:L1').merge();
+  sh.getRange('K1')
+    .setValue('DIVULGAR AVOP SELECIONADO')
+    .setFontWeight('bold')
+    .setFontColor('#ffffff')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setBackground('#0b63ce')
+    .setNote('Selecione uma linha de AVOP e use o menu AVOPS > Divulgar AVOP selecionado. Se houver imagem de botao criada, clique nela.');
+  sh.setRowHeight(1, 42);
+
+  try {
+    const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAlgAAAB4CAYAAABkW1RnAAAAAXNSR0IArs4c6QAAIABJREFUeF7tnXl4FNV5x7+q7p6Z3c0mIQkBkhAIhBBEIEFxVBBBXBAcUFwUV1FQEVcUUVwUFwRBRBBRBBARBAgIQhAIkJCEzOzu6p7v93yq6urqzuzM7OyuJCEJ+f3+3tM9VdX3qvqq6q7q+v7vVwEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADg5r4B6nNw9AIAAAAAAABgH8EAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgEAAAAAAAAAAAMBgvwHAf7EOHcFzUwAAAABJRU5ErkJggg==';
+    const pngBase64Button = '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';
+    const blob = Utilities.newBlob(Utilities.base64Decode(pngBase64Button), 'image/png', 'divulgar-avop.png');
+    const image = sh.insertImage(blob, 11, 2);
+    image.setAltTextTitle('Divulgar AVOP selecionado');
+    image.setAltTextDescription('Selecione uma linha de AVOP e clique para enviar a divulgacao ao publico-alvo.');
+    image.assignScript('divulgarAvopSelecionado');
+  } catch (err) {
+    sh.getRange('K2:L3').merge();
+    sh.getRange('K2')
+      .setValue('Use o menu AVOPS > Divulgar AVOP selecionado')
+      .setFontWeight('bold')
+      .setFontColor('#0b63ce')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle')
+      .setBorder(true, true, true, true, true, true, '#0b63ce', SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
+  }
+
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    'Botao/atalho criado na aba AVOPS. Selecione um AVOP antes de acionar.',
+    'Botao de divulgacao',
+    8
+  );
+}
+
+function divulgarAvopPorLinha_(rowNumber) {
+  const { values: efetivo, header: eh } = getTable_(SHEET_EFETIVO);
+  const { sh, values: avops, header: ah } = getTable_(SHEET_AVOPS);
+  const logSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EMAIL_LOG);
+  if (!logSh) throw new Error(`Aba ${SHEET_EMAIL_LOG} nao encontrada.`);
+
+  const row = avops[rowNumber - 1];
+  if (!row) throw new Error(`Linha ${rowNumber} nao encontrada em ${SHEET_AVOPS}.`);
+
+  const a_id = findHeaderIndex_(ah, 'AVOP_ID');
+  const a_titulo = findHeaderIndex_(ah, 'TITULO');
+  const a_web = findHeaderIndex_(ah, 'WEBAPP_URL');
+  const a_status = findHeaderIndex_(ah, 'STATUS');
+  const a_perfil = findHeaderIndex_(ah, 'PERFIL_ALVO');
+  const a_exige = findHeaderIndex_(ah, 'EXIGE_CIENCIA');
+
+  const e_id = findHeaderIndex_(eh, 'ID');
+  const e_email = findHeaderIndex_(eh, 'EMAIL');
+  const e_ativo = findHeaderIndex_(eh, 'ATIVO');
+
+  const avopId = normalize_(row[a_id]);
+  const titulo = normalize_(row[a_titulo]);
+  const statusAvop = normalizeUpper_(row[a_status]);
+  const perfilAlvo = normalizeUpper_(row[a_perfil]);
+  const exigeCiencia = normalizeUpper_(row[a_exige]);
+  let webUrl = normalize_(row[a_web]);
+
+  if (!avopId) throw new Error('AVOP_ID vazio na linha selecionada.');
+  if (statusAvop !== 'ATIVO') throw new Error(`${avopId} nao esta ATIVO.`);
+  if (exigeCiencia !== 'SIM') throw new Error(`${avopId} nao exige ciencia.`);
+  if (!perfilAlvo) throw new Error(`${avopId} esta sem PERFIL_ALVO.`);
+
+  if (!webUrl) {
+    webUrl = buildWebAppUrl_(getWebAppBaseUrl_(), avopId);
+    sh.getRange(rowNumber, a_web + 1).setValue(webUrl);
+  }
+
+  const logValues = logSh.getDataRange().getValues();
+  const logHeader = logValues[0];
+  let enviados = 0;
+  let ignorados = 0;
+  let erros = 0;
+
+  for (let i = 1; i < efetivo.length; i++) {
+    const ativo = normalizeUpper_(efetivo[i][e_ativo]) === 'SIM';
+    if (!ativo) continue;
+
+    const id = normalizeUpper_(efetivo[i][e_id]);
+    const email = normalize_(efetivo[i][e_email]);
+    const perfilUsuario = getPerfisFromEfetivoRow_(eh, efetivo[i]);
+
+    if (!id || !email) continue;
+    if (!perfilAlvoIncluiPerfil_(perfilAlvo, perfilUsuario)) continue;
+
+    if (emailJaEnviado_(logValues, logHeader, avopId, id, 'DIVULGACAO')) {
+      ignorados++;
+      continue;
+    }
+
+    const emailData = buildAvopEmailData_(avopId, titulo, webUrl, id, 'DIVULGACAO');
+    try {
+      GmailApp.sendEmail(email, emailData.assunto, emailData.corpo, getCobrancaEmailOptions_());
+      logSh.appendRow([new Date(), avopId, id, email, 'DIVULGACAO', 'ENVIADO', 'ENVIO_INICIAL']);
+      enviados++;
+    } catch (err) {
+      logSh.appendRow([new Date(), avopId, id, email, 'DIVULGACAO', 'ERRO', String(err)]);
+      erros++;
+    }
+  }
+
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    `${avopId}: ${enviados} enviados, ${ignorados} ignorados, ${erros} erros.`,
+    'Divulgacao de AVOP',
+    8
+  );
+
+  return { ok: true, avopId, enviados, ignorados, erros };
+}
+
+function buildAvopEmailData_(avopId, titulo, webUrl, id, tipo) {
+  const linkCiencia = buildAvopCobrancaUrl_(webUrl, avopId, id);
+  const isDivulgacao = normalizeUpper_(tipo) === 'DIVULGACAO';
+  const assunto = isDivulgacao
+    ? `Divulgação de AVOP: ${avopId}`
+    : `Pendência de ciência (AVOP): ${avopId}`;
+  const linhaInicial = isDivulgacao
+    ? 'Foi divulgado o seguinte AVOP, com necessidade de ciência:'
+    : 'Consta como pendente a ciência do seguinte AVOP:';
+
+  return {
+    assunto,
+    corpo:
+`Caro tripulante,
+
+${linhaInicial}
+
+${avopId} - ${titulo}
+
+Para registrar ciência, acesse o link abaixo:
+
+${linkCiencia}
+
+CDOUT - 1º/11º GAV. Este é um lembrete automático do sistema de controle de AVOPs.
+`
+  };
+}
+
+function buildAvopCobrancaUrl_(webUrl, avopId, id) {
+  const base = String(webUrl || '').trim();
+  const token = gerarTokenSessao_(id);
+  const url = base || buildWebAppUrl_(getWebAppBaseUrl_(), avopId);
+  return [
+    addQueryParam_(url, 'token', token),
+    'auto=1',
+    'returnAba=AVOP',
+    `returnId=${encodeURIComponent(id)}`,
+    'returnAvopStatus=TODOS'
+  ].join('&');
+}
+
+function getCobrancaEmailOptions_() {
+  const from = getChefeEmail_() || 'cdout.1gav11@gmail.com';
+  return {
+    from,
+    name: 'CDOUT - 1º/11º GAV'
+  };
+}
+
+function testarEmailCobrancaAvop01Charles() {
+  return enviarEmailCobrancaAvopTeste_('AVOP 01-2026', 'CHA', 'charlescdma@fab.mil.br');
+}
+
+function enviarEmailCobrancaAvopTeste_(avopIdAlvo, idAlvo, emailAlvo) {
+  const { values: efetivo, header: eh } = getTable_(SHEET_EFETIVO);
+  const { values: avops, header: ah } = getTable_(SHEET_AVOPS);
+  const logSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_EMAIL_LOG);
+  if (!logSh) throw new Error(`Aba ${SHEET_EMAIL_LOG} nao encontrada.`);
+
+  const e_id = findHeaderIndex_(eh, 'ID');
+  const e_email = findHeaderIndex_(eh, 'EMAIL');
+  const e_ativo = findHeaderIndex_(eh, 'ATIVO');
+  const a_id = findHeaderIndex_(ah, 'AVOP_ID');
+  const a_titulo = findHeaderIndex_(ah, 'TITULO');
+  const a_web = findHeaderIndex_(ah, 'WEBAPP_URL');
+  const a_status = findHeaderIndex_(ah, 'STATUS');
+
+  const id = normalizeUpper_(idAlvo);
+  let emailEfetivo = '';
+  let ativo = false;
+  for (let i = 1; i < efetivo.length; i++) {
+    if (normalizeUpper_(efetivo[i][e_id]) !== id) continue;
+    emailEfetivo = normalize_(efetivo[i][e_email]);
+    ativo = normalizeUpper_(efetivo[i][e_ativo]) === 'SIM';
+    break;
+  }
+
+  if (!ativo) throw new Error(`Trigrama ${id} nao esta ativo no efetivo.`);
+  if (normalizeUpper_(emailEfetivo) !== normalizeUpper_(emailAlvo)) {
+    throw new Error(`E-mail informado nao confere com o efetivo: ${emailEfetivo}`);
+  }
+
+  for (let i = 1; i < avops.length; i++) {
+    const avopId = normalize_(avops[i][a_id]);
+    if (normalizarAvopIdParaComparacao_(avopId) !== normalizarAvopIdParaComparacao_(avopIdAlvo)) continue;
+    if (normalizeUpper_(avops[i][a_status]) !== 'ATIVO') throw new Error(`${avopId} nao esta ATIVO.`);
+
+    const titulo = normalize_(avops[i][a_titulo]);
+    const webUrl = normalize_(avops[i][a_web]);
+    const linkCiencia = buildAvopCobrancaUrl_(webUrl, avopId, id);
+    const assunto = `Pendência de ciência (AVOP): ${avopId}`;
+    const corpo =
+`Caro tripulante,
+
+Consta como pendente a ciência do seguinte AVOP:
+
+${avopId} - ${titulo}
+
+Para registrar ciência, acesse o link abaixo:
+
+${linkCiencia}
+
+CDOUT - 1º/11º GAV. Este é um lembrete automático do sistema de controle de AVOPs.
+`;
+
+    try {
+      GmailApp.sendEmail(emailAlvo, assunto, corpo, getCobrancaEmailOptions_());
+      logSh.appendRow([new Date(), avopId, id, emailAlvo, 'TESTE_LEMBRETE', 'ENVIADO', 'TESTE_MANUAL']);
+      return { ok: true, msg: `Teste enviado para ${emailAlvo}.`, link: linkCiencia };
+    } catch (err) {
+      logSh.appendRow([new Date(), avopId, id, emailAlvo, 'TESTE_LEMBRETE', 'ERRO', String(err)]);
+      throw err;
+    }
+  }
+
+  throw new Error(`AVOP nao encontrado: ${avopIdAlvo}`);
 }
 
 function podeCobrarHoje_(logValues, logHeader, avopId, idUpper, tipo) {
@@ -1119,6 +663,27 @@ function marcoJaCobrado_(logValues, logHeader, avopId, idUpper, tipo, marco) {
   return false;
 }
 
+function emailJaEnviado_(logValues, logHeader, avopId, idUpper, tipo) {
+  const idxAvop = findHeaderIndex_(logHeader, 'AVOP_ID');
+  const idxId = findHeaderIndex_(logHeader, 'ID');
+  const idxTipo = findHeaderIndex_(logHeader, 'TIPO');
+  const idxStatus = findHeaderIndex_(logHeader, 'STATUS');
+  const avopKey = normalizarAvopIdParaComparacao_(avopId);
+
+  for (let i = 1; i < logValues.length; i++) {
+    const rowAv = normalizarAvopIdParaComparacao_(logValues[i][idxAvop]);
+    const rowId = normalizeUpper_(logValues[i][idxId]);
+    const rowTipo = normalizeUpper_(logValues[i][idxTipo]);
+    const rowStatus = normalizeUpper_(logValues[i][idxStatus]);
+
+    if (rowAv === avopKey && rowId === idUpper && rowTipo === tipo && rowStatus === 'ENVIADO') {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /*****************
  * TESTES / DEBUG
  *****************/
@@ -1135,7 +700,7 @@ function testeHTML() {
     }
   }
 
-  throw new Error('Não achou nenhum dos nomes: Index, index, Index.html');
+  throw new Error('Nao achou nenhum dos nomes: Index, index, Index.html');
 }
 
 function testePreview() {
@@ -1143,3 +708,5 @@ function testePreview() {
     toDrivePreviewUrl_('https://drive.google.com/file/d/ABC123/view?usp=sharing')
   );
 }
+
+

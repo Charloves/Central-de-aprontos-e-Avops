@@ -1,79 +1,117 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
   <base target="_top">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    :root {
+      --bg: #eef3f9;
+      --surface: #ffffff;
+      --surface-alt: #f7f9fc;
+      --border: #d7e0ea;
+      --text: #122033;
+      --muted: #5f6d7c;
+      --primary: #0b63ce;
+      --secondary: #5b6572;
+      --success: #198754;
+      --warning-bg: #fff1c2;
+      --warning-text: #7b5900;
+      --warning-border: #f0dc8d;
+      --shadow: 0 18px 50px rgba(11, 41, 82, 0.08);
+    }
+
     body {
       font-family: Arial, sans-serif;
-      margin: 18px;
-      background: #f5f7fa;
-      color: #212529;
+      margin: 0;
+      padding: 18px 12px 24px;
+      background:
+        radial-gradient(circle at top, rgba(11, 99, 206, 0.08), transparent 30%),
+        var(--bg);
+      color: var(--text);
     }
 
     .card {
       max-width: 680px;
       margin: 0 auto;
-      padding: 18px;
-      border: 1px solid #ddd;
-      border-radius: 14px;
-      background: white;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
     }
 
     .title {
-      font-size: 20px;
+      font-size: 26px;
       font-weight: 700;
       margin-bottom: 6px;
+      letter-spacing: -0.02em;
     }
 
     .muted {
-      color: #666;
-      font-size: 13px;
-      line-height: 1.35;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
     }
 
     .subcard {
       margin-top: 16px;
-      padding: 16px;
-      border: 1px solid #e1e5ea;
-      border-radius: 12px;
-      background: #fafafa;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface-alt);
     }
 
     .section-title {
-      font-size: 16px;
+      font-size: 17px;
       font-weight: 700;
       margin-bottom: 10px;
-      color: #343a40;
+      color: #24364a;
     }
 
     .alerta {
       margin-top: 14px;
       padding: 12px 14px;
-      border-radius: 10px;
-      background: #fff3cd;
-      color: #856404;
+      border-radius: 12px;
+      background: var(--warning-bg);
+      color: var(--warning-text);
       font-size: 14px;
       font-weight: 600;
-      border: 1px solid #ffe69c;
+      border: 1px solid var(--warning-border);
+    }
+
+    .intro {
+      margin-top: 8px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: #edf4ff;
+      border: 1px solid #d4e5ff;
+    }
+
+    .intro strong {
+      display: block;
+      margin-bottom: 6px;
     }
 
     label {
       display: block;
-      margin-top: 10px;
-      font-size: 13px;
+      margin-top: 12px;
+      font-size: 12px;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #5f6d7c;
     }
 
     input {
       width: 100%;
       box-sizing: border-box;
-      padding: 10px;
+      padding: 12px 14px;
       margin-top: 6px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
+      border: 1px solid #b9c8d8;
+      border-radius: 12px;
       font-size: 15px;
+      color: var(--text);
     }
 
     input:disabled {
@@ -86,19 +124,19 @@
       display: block;
       width: 100%;
       box-sizing: border-box;
-      padding: 12px;
+      padding: 12px 14px;
       margin-top: 12px;
       border: 0;
-      border-radius: 10px;
+      border-radius: 12px;
       cursor: pointer;
       font-size: 15px;
-      font-weight: 600;
+      font-weight: 700;
       text-align: center;
       text-decoration: none;
     }
 
     button {
-      background: #0d6efd;
+      background: var(--primary);
       color: white;
     }
 
@@ -108,12 +146,12 @@
     }
 
     .btnSecondary {
-      background: #6c757d;
+      background: var(--secondary);
       color: white;
     }
 
     .btnlink {
-      background: #198754;
+      background: var(--success);
       color: white;
     }
 
@@ -121,20 +159,21 @@
       margin-top: 14px;
       font-size: 14px;
       font-weight: 600;
+      min-height: 20px;
     }
 
     .footer-link {
       display: block;
       margin-top: 16px;
       text-align: center;
-      color: #0d6efd;
+      color: var(--primary);
       text-decoration: none;
       font-weight: 600;
     }
 
     @media (max-width: 600px) {
       body {
-        margin: 12px;
+        padding: 12px 10px 20px;
       }
 
       .card {
@@ -164,24 +203,29 @@
 <body>
   <div class="card">
     <div class="title">Apronto</div>
-    <div><b><?= aprontoId ?></b> — <?= titulo ?></div>
+    <div><b><?= aprontoId ?></b> - <?= titulo ?></div>
     <div class="muted">
       Data: <b><?= data ?></b> • Público: <b><?= publico ?></b> • Status: <b><?= status ?></b>
     </div>
 
+    <div class="intro">
+      <strong>Fluxo desta tela</strong>
+      Use os botões abaixo para registrar presença, informar justificativa ou confirmar a ciência do material. O trigrama autenticado já vem preenchido automaticamente.
+    </div>
+
     <? if (status === 'FECHADO') { ?>
       <div class="alerta">
-        Este apronto está fechado para registro de presença ou justificativa. O material permanece disponível para consulta e ciência.
+        Este apronto está fechado para presença e justificativa. O material continua disponível para consulta e, quando aplicável, para registro de ciência.
       </div>
     <? } ?>
 
     <div class="subcard">
-      <div class="section-title">Participação no Apronto</div>
+      <div class="section-title">Participação</div>
 
       <label for="id">Trigrama</label>
       <input
         id="id"
-        placeholder="Ex: CHA"
+        placeholder="Ex.: CHA"
         maxlength="3"
         autocomplete="off"
         oninput="this.value = this.value.toUpperCase()"
@@ -193,13 +237,13 @@
         onclick="presenca()"
         <?= status === 'FECHADO' ? 'disabled' : '' ?>
       >
-        Registrar Presença
+        Confirmar presença
       </button>
 
-      <label for="obs">Justificativa simples</label>
+      <label for="obs">Justificativa</label>
       <input
         id="obs"
-        placeholder="Ex: escala"
+        placeholder="Ex.: escala, missão ou atendimento"
         autocomplete="off"
         <?= status === 'FECHADO' ? 'disabled' : '' ?>
       />
@@ -210,24 +254,24 @@
         onclick="justificar()"
         <?= status === 'FECHADO' ? 'disabled' : '' ?>
       >
-        Marcar como JUSTIFICADO
+        Registrar justificativa
       </button>
     </div>
 
     <div class="subcard">
-      <div class="section-title">Material do Apronto</div>
+      <div class="section-title">Material</div>
 
       <label for="idMaterial">Trigrama</label>
       <input
         id="idMaterial"
-        placeholder="Ex: CHA"
+        placeholder="Ex.: CHA"
         maxlength="3"
         autocomplete="off"
         oninput="this.value = this.value.toUpperCase()"
       />
 
       <? if (linkMaterial) { ?>
-        <a class="btnlink" href="<?= linkMaterial ?>" download>Baixar material do apronto</a>
+        <a class="btnlink" href="<?= linkMaterial ?>" download>Baixar material</a>
       <? } else { ?>
         <div class="muted">Não há material disponível para este apronto.</div>
       <? } ?>
@@ -249,6 +293,18 @@
   <script>
     const aprontoId = "<?= aprontoId ?>";
     const statusApronto = "<?= status ?>";
+    const token = "<?= token ?>";
+    const authId = "<?= authId ?>";
+
+    window.addEventListener('load', function () {
+      ['id', 'idMaterial'].forEach((fieldId) => {
+        const el = document.getElementById(fieldId);
+        if (el && authId) {
+          el.value = authId;
+          el.readOnly = true;
+        }
+      });
+    });
 
     function setMsg(text, ok = true) {
       const el = document.getElementById('msg');
@@ -259,18 +315,11 @@
 
     function presenca() {
       if (statusApronto === 'FECHADO') {
-        setMsg('Apronto fechado para registro de presença.', false);
+        setMsg('Este apronto está fechado para registro de presença.', false);
         return;
       }
 
-      const id = document.getElementById('id').value.trim();
       const btn = document.getElementById('btnPres');
-
-      if (!id) {
-        setMsg('Informe seu Trigrama.', false);
-        return;
-      }
-
       if (btn) btn.disabled = true;
 
       google.script.run
@@ -282,24 +331,17 @@
           setMsg('Falha: ' + (err?.message || err), false);
           if (btn) btn.disabled = false;
         })
-        .registrarPresenca({ aprontoId, id });
+        .registrarPresenca({ aprontoId, token });
     }
 
     function justificar() {
       if (statusApronto === 'FECHADO') {
-        setMsg('Apronto fechado para justificativa.', false);
+        setMsg('Este apronto está fechado para justificativa.', false);
         return;
       }
 
-      const id = document.getElementById('id').value.trim();
       const obs = document.getElementById('obs').value.trim() || 'escala';
       const btn = document.getElementById('btnJust');
-
-      if (!id) {
-        setMsg('Informe seu Trigrama.', false);
-        return;
-      }
-
       if (btn) btn.disabled = true;
 
       google.script.run
@@ -311,18 +353,11 @@
           setMsg('Falha: ' + (err?.message || err), false);
           if (btn) btn.disabled = false;
         })
-        .justificarAusencia({ aprontoId, id, obs });
+        .justificarAusencia({ aprontoId, obs, token });
     }
 
     function registrarCienciaMaterial() {
-      const id = document.getElementById('idMaterial').value.trim();
       const btn = document.getElementById('btnCiencia');
-
-      if (!id) {
-        setMsg('Informe seu Trigrama para registrar a ciência do material.', false);
-        return;
-      }
-
       if (btn) btn.disabled = true;
 
       google.script.run
@@ -334,7 +369,7 @@
           setMsg('Falha: ' + (err?.message || err), false);
           if (btn) btn.disabled = false;
         })
-        .registrarCienciaMaterial({ aprontoId, id });
+        .registrarCienciaMaterial({ aprontoId, token });
     }
   </script>
 </body>

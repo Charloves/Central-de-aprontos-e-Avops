@@ -1,70 +1,107 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
   <base target="_top">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    :root {
+      --bg: #eef3f9;
+      --surface: #ffffff;
+      --border: #d7e0ea;
+      --text: #122033;
+      --muted: #5f6d7c;
+      --primary: #0b63ce;
+      --shadow: 0 18px 50px rgba(11, 41, 82, 0.08);
+    }
+
     body {
       font-family: Arial, sans-serif;
-      margin: 18px;
-      background: #f5f5f5;
-      color: #212529;
+      margin: 0;
+      padding: 18px 12px 24px;
+      background:
+        radial-gradient(circle at top, rgba(11, 99, 206, 0.08), transparent 30%),
+        var(--bg);
+      color: var(--text);
     }
 
     .card {
       max-width: 560px;
       margin: 0 auto;
-      padding: 18px;
-      border: 1px solid #ddd;
-      border-radius: 12px;
-      background: white;
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
     }
 
     .title {
-      font-size: 20px;
+      font-size: 26px;
       font-weight: 700;
       margin-bottom: 6px;
+      letter-spacing: -0.02em;
     }
 
     .muted {
-      color: #666;
-      font-size: 13px;
-      line-height: 1.35;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
     }
 
     .row {
       margin-top: 4px;
     }
 
+    .intro {
+      margin-top: 10px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: #edf4ff;
+      border: 1px solid #d4e5ff;
+      font-size: 14px;
+      line-height: 1.45;
+      color: #294264;
+    }
+
+    .intro strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
     label {
       display: block;
       margin-top: 12px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #5f6d7c;
     }
 
     input {
       width: 100%;
       box-sizing: border-box;
-      padding: 10px;
+      padding: 12px 14px;
       margin-top: 6px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
+      border: 1px solid #b9c8d8;
+      border-radius: 12px;
       font-size: 16px;
       text-transform: uppercase;
+      color: var(--text);
     }
 
     button {
       width: 100%;
-      padding: 12px;
+      padding: 12px 14px;
       margin-top: 14px;
       border: 0;
-      border-radius: 10px;
+      border-radius: 12px;
       cursor: pointer;
       font-size: 16px;
-      background: #2c6ed5;
+      background: var(--primary);
       color: white;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     button:disabled {
@@ -75,6 +112,7 @@
       margin-top: 10px;
       font-size: 14px;
       font-weight: 600;
+      min-height: 20px;
     }
 
     iframe {
@@ -85,7 +123,7 @@
 
     @media (max-width: 600px) {
       body {
-        margin: 12px;
+        padding: 12px 10px 20px;
       }
 
       .card {
@@ -111,14 +149,19 @@
       <b><?= avopId ?></b> — <?= titulo ?>
     </div>
 
+    <div class="intro">
+      <strong>Fluxo desta tela</strong>
+      Confirme a ciência do AVOP e, em seguida, o documento será aberto para leitura. O trigrama autenticado já vem preenchido automaticamente.
+    </div>
+
     <p class="muted">
-      Informe seu <b>TRIGRAMA</b> para registrar a ciência do AVOP.
+      Use esta tela para registrar a ciência do AVOP antes de abrir o documento.
     </p>
 
-    <label for="id">TRIGRAMA</label>
+    <label for="id">Trigrama</label>
     <input
       id="id"
-      placeholder="Ex: CHA"
+      placeholder="Ex.: CHA"
       maxlength="3"
       autocomplete="off"
       oninput="this.value = this.value.toUpperCase()"
@@ -127,12 +170,12 @@
     <label for="nome">Nome (opcional)</label>
     <input
       id="nome"
-      placeholder="Ex: Fulano"
+      placeholder="Ex.: Fulano"
       autocomplete="off"
     />
 
     <button id="btn" onclick="enviar()">
-      Registrar ciência e abrir AVOP
+      Registrar ciência e abrir o AVOP
     </button>
 
     <div class="msg" id="msg"></div>
@@ -141,7 +184,38 @@
   <script>
     const avopId = "<?= avopId ?>";
     const pdfUrl = "<?= pdfUrl ?>";
-    const baseUrl = "<?= baseUrl ?>";
+    const injectedBaseUrl = "<?= baseUrl ?>";
+    const currentPageBaseUrl = window.location.href.split('?')[0];
+    const isAppsScriptEditorPanel = /script\.googleusercontent\.com/i.test(window.location.hostname)
+      || /userCodeAppPanel/i.test(window.location.href);
+    const baseUrl = isAppsScriptEditorPanel ? injectedBaseUrl : (currentPageBaseUrl || injectedBaseUrl);
+    const token = "<?= token ?>";
+    const authId = "<?= authId ?>";
+    const autoOpen = "<?= autoOpen ?>";
+    const returnAba = "<?= returnAba ?>";
+    const returnId = "<?= returnId ?>";
+    const returnBusca = "<?= returnBusca ?>";
+    const returnAvopStatus = "<?= returnAvopStatus ?>";
+
+    window.addEventListener('load', function () {
+      const idEl = document.getElementById('id');
+      if (idEl && authId) {
+        idEl.value = authId;
+        idEl.readOnly = true;
+      }
+
+      if (autoOpen === '1') {
+        const card = document.querySelector('.card');
+        if (card) {
+          card.innerHTML = `
+            <div class="title">Abrindo AVOP</div>
+            <p class="muted">Registrando ci\u00eancia e preparando o documento para leitura.</p>
+            <div class="msg" id="msg"></div>
+          `;
+        }
+        enviar(true);
+      }
+    });
 
     function setMsg(text, ok = true) {
       const el = document.getElementById('msg');
@@ -150,24 +224,19 @@
       el.style.color = ok ? 'green' : 'crimson';
     }
 
-    function enviar() {
-      const id = document.getElementById('id').value.trim();
-      const nome = document.getElementById('nome').value.trim();
+    function enviar(auto = false) {
+      const nomeEl = document.getElementById('nome');
+      const nome = nomeEl ? nomeEl.value.trim() : '';
       const btn = document.getElementById('btn');
 
-      if (!id) {
-        setMsg('Informe seu trigrama.', false);
-        return;
-      }
-
-      btn.disabled = true;
+      if (btn) btn.disabled = true;
       setMsg('Registrando ciência...', true);
 
       google.script.run
         .withSuccessHandler((res) => {
           if (!res || !res.ok) {
-            setMsg((res && res.msg) ? res.msg : 'Erro ao registrar.', false);
-            btn.disabled = false;
+            setMsg((res && res.msg) ? res.msg : 'Não foi possível registrar a ciência.', false);
+            if (btn) btn.disabled = false;
             return;
           }
 
@@ -176,9 +245,20 @@
         })
         .withFailureHandler((err) => {
           setMsg('Falha: ' + (err && err.message ? err.message : err), false);
-          btn.disabled = false;
+          if (btn) btn.disabled = false;
         })
-        .registrarLeitura({ avopId, id, nome });
+        .registrarLeitura({ avopId, nome, token });
+    }
+
+    function buildReturnUrl() {
+      const url = new URL(baseUrl, window.location.origin);
+      url.searchParams.set('aba', returnAba || 'AVOP');
+      url.searchParams.set('id', returnId || authId || '');
+      url.searchParams.set('avopStatus', returnAvopStatus || 'TODOS');
+      url.searchParams.set('autoSearch', '1');
+      if (returnBusca) url.searchParams.set('busca', returnBusca);
+      if (token) url.searchParams.set('token', token);
+      return url.toString();
     }
 
     function abrirPDF() {
@@ -203,7 +283,7 @@
       btn.style.fontWeight = '600';
 
       btn.addEventListener('click', function () {
-        window.top.location.href = baseUrl;
+        window.top.location.href = buildReturnUrl();
       });
 
       const viewer = document.createElement('iframe');
@@ -220,3 +300,4 @@
   </script>
 </body>
 </html>
+
