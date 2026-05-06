@@ -11,7 +11,10 @@ build/
 coverage/
 
 # Artefatos gerados localmente
-oi_fases_h50/
+oi_fases_h*/
+oi_h125_rows.json
+oi_h50_rows.json
+oi_h*.tsv
 qrcode-exec*.png
 divulgar-avop-button.*
 

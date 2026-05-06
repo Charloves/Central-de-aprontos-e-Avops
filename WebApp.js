@@ -110,6 +110,30 @@ function doGet(e) {
     }
   }
 
+  if (maintenanceParam === 'importar_oi_h125_json') {
+    if (maintenanceKey !== 'OIH50_FILL_20260331') {
+      return HtmlService.createHtmlOutput('Chave de manutencao invalida.');
+    }
+    try {
+      const result = importarOiRowsJson_(SHEET_OI_H125, normalize_(e?.parameter?.fileId));
+      return HtmlService.createHtmlOutput(JSON.stringify({ ok: true, result }));
+    } catch (err) {
+      return HtmlService.createHtmlOutput(`Erro ao importar OI H125: ${String(err.message || err)}`);
+    }
+  }
+
+  if (maintenanceParam === 'importar_oi_h50_json') {
+    if (maintenanceKey !== 'OIH50_FILL_20260331') {
+      return HtmlService.createHtmlOutput('Chave de manutencao invalida.');
+    }
+    try {
+      const result = importarOiRowsJson_(SHEET_OI_H50, normalize_(e?.parameter?.fileId));
+      return HtmlService.createHtmlOutput(JSON.stringify({ ok: true, result }));
+    } catch (err) {
+      return HtmlService.createHtmlOutput(`Erro ao importar OI H50: ${String(err.message || err)}`);
+    }
+  }
+
   if (oiViewerParam === '1') {
     try {
       return renderOiViewerPage_(oiViewerAeronave, oiViewerKey, tokenParam, fallbackBaseUrl, oiViewerPage);

@@ -25,6 +25,14 @@ function extractOiPhaseCodes_(value) {
   return [...new Set(matches)];
 }
 
+function extractOiMissionCodes_(value) {
+  const compact = normalizeOiCompact_(value);
+  if (!compact) return [];
+
+  const matches = compact.match(/\d{2}[A-Z]{2}\d{2}[A-Z]\d{2}/g) || [];
+  return [...new Set(matches)];
+}
+
 function deriveOiPhaseKey_(value) {
   const compact = normalizeOiCompact_(value);
   if (!compact) return '';
@@ -52,9 +60,16 @@ function buildOiSearchCandidate_(row, indexes, aeronave) {
   const titulo = normalize_(row[indexes.o_titulo]);
   const pdfUrl = normalize_(row[indexes.o_pdf]);
   const pdfFaseUrl = indexes.o_pdfFase >= 0 ? normalize_(row[indexes.o_pdfFase]) : '';
+  const missoes = indexes.o_missoes >= 0 ? normalize_(row[indexes.o_missoes]) : '';
   const pagInicial = Number(row[indexes.o_pagIni] || 0);
   const effectivePdfUrl = pdfFaseUrl || pdfUrl;
   const effectiveInitialPage = pdfFaseUrl ? 1 : pagInicial;
+  const missionCodes = [
+    ...extractOiMissionCodes_(missoes),
+    ...extractOiMissionCodes_(oiKey),
+    ...extractOiMissionCodes_(faseId),
+    ...extractOiMissionCodes_(normalize_(row[indexes.o_chave]))
+  ].filter(Boolean);
 
   return {
     aeronave,
@@ -85,13 +100,16 @@ function buildOiSearchCandidate_(row, indexes, aeronave) {
         ...extractOiPhaseCodes_(extractOiCodigo_(oiKey)),
         ...extractOiPhaseCodes_(oiKey),
         ...extractOiPhaseCodes_(faseId),
-        ...extractOiPhaseCodes_(normalize_(row[indexes.o_chave]))
+        ...extractOiPhaseCodes_(normalize_(row[indexes.o_chave])),
+        ...extractOiPhaseCodes_(missoes)
       ].filter(Boolean),
+      missionCodes: [...new Set(missionCodes)],
       fields: [
         normalizeOiCompact_(extractOiCodigo_(oiKey)),
         normalizeOiCompact_(oiKey),
         normalizeOiCompact_(faseId),
         normalizeOiCompact_(normalize_(row[indexes.o_chave])),
+        normalizeOiCompact_(missoes),
         normalizeOiCompact_(titulo),
         normalizeOiCompact_(programa),
         normalizeOiCompact_(subprograma)
@@ -103,11 +121,32 @@ function buildOiSearchCandidate_(row, indexes, aeronave) {
 function scoreOiMatch_(query, candidate) {
   const compact = normalizeOiCompact_(query);
   const tokens = tokenizeOiSearch_(query);
+  const queryMissionCodes = extractOiMissionCodes_(query);
   const queryPhaseKey = deriveOiPhaseKey_(query);
   const search = candidate.search || {};
   const fields = search.fields || [];
   const phaseCodes = search.phaseCodes || [];
+  const missionCodes = search.missionCodes || [];
   if (!compact || !fields.length) return { ok: false, score: 999, label: '' };
+
+  if (queryMissionCodes.length) {
+    const missionCode = queryMissionCodes[0];
+    const missionPhase = missionCode.slice(0, 6);
+
+    if (missionCodes.includes(missionCode)) {
+      return { ok: true, score: 0, label: 'Missao exata' };
+    }
+
+    // Quando a linha tem lista de missoes, codigo completo fora da lista nao deve
+    // cair no match amplo por FASE_ID. Isso separa, por exemplo, 01HE01D18 de D20/D21.
+    if (missionCodes.length && phaseCodes.includes(missionPhase)) {
+      return { ok: false, score: 999, label: '' };
+    }
+
+    if (!missionCodes.length && phaseCodes.includes(missionPhase)) {
+      return { ok: true, score: 2, label: 'Mesma fase' };
+    }
+  }
 
   if (queryPhaseKey && phaseCodes.includes(queryPhaseKey)) {
     if (compact.length === 6) return { ok: true, score: 0, label: 'Exata' };
@@ -197,13 +236,14 @@ function getCentralOI(params) {
   const o_titulo = findHeaderIndex_(oh, 'TITULO');
   const o_pdf = findHeaderIndex_(oh, 'PDF_URL');
   const o_pdfFase = findOptionalHeaderIndex_(oh, 'PDF_FASE_URL');
+  const o_missoes = findOptionalHeaderIndex_(oh, 'MISSOES');
   const o_pagIni = findHeaderIndex_(oh, 'PAG_INICIAL');
   const o_pagFim = findHeaderIndex_(oh, 'PAG_FINAL');
   const o_tipo = findHeaderIndex_(oh, 'TIPO');
   const o_status = findHeaderIndex_(oh, 'STATUS');
   const o_chave = findHeaderIndex_(oh, 'CHAVE_EXIBICAO');
   const indexes = {
-    o_key, o_programa, o_subprograma, o_fase, o_titulo, o_pdf, o_pdfFase, o_pagIni, o_pagFim, o_tipo, o_status, o_chave
+    o_key, o_programa, o_subprograma, o_fase, o_titulo, o_pdf, o_pdfFase, o_missoes, o_pagIni, o_pagFim, o_tipo, o_status, o_chave
   };
 
   const items = [];
@@ -352,6 +392,39 @@ function buildOiViewerPageUrl_(baseUrl, aeronave, oiKey, page) {
 
 function fillOiPhasePdfUrlsH50() {
   return fillOiPhasePdfUrlsForSheet_(SHEET_OI_H50, '1GxM0mlnsX_PX3z7VX6tWCgWRZhS1Zrl8', 'H50');
+}
+
+function importarOiRowsJson_(sheetName, jsonFileId) {
+  const targetSheetName = normalize_(sheetName);
+  const fileId = normalize_(jsonFileId);
+  if (!targetSheetName) throw new Error('Nome da aba nao informado.');
+  if (!fileId) throw new Error('ID do arquivo JSON nao informado.');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(targetSheetName);
+  if (!sh) throw new Error(`Aba ${targetSheetName} nao encontrada.`);
+
+  const content = DriveApp.getFileById(fileId).getBlob().getDataAsString('UTF-8');
+  const rows = JSON.parse(content);
+  if (!Array.isArray(rows) || rows.length < 2 || !Array.isArray(rows[0])) {
+    throw new Error('JSON de OI invalido: esperado array de linhas.');
+  }
+
+  sh.clearContents();
+  sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+  sh.setFrozenRows(1);
+  SpreadsheetApp.flush();
+
+  return {
+    sheetName: targetSheetName,
+    rows: rows.length,
+    items: rows.length - 1,
+    columns: rows[0].length
+  };
+}
+
+function importarOiH125JsonRefinado() {
+  return importarOiRowsJson_(SHEET_OI_H125, '1AkTJ3kNzkLOlcJn1hqMi2UN91HxRO590');
 }
 
 function fillOiPhasePdfUrlsForSheet_(sheetName, folderId, prefix) {
