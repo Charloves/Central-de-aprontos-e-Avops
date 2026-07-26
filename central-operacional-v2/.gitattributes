@@ -1,0 +1,6 @@
+*.md text working-tree-encoding=UTF-8
+*.ts text working-tree-encoding=UTF-8
+*.tsx text working-tree-encoding=UTF-8
+*.json text working-tree-encoding=UTF-8
+*.sql text working-tree-encoding=UTF-8
+*.css text working-tree-encoding=UTF-8
