@@ -106,3 +106,5 @@ Regras históricas:
 - registrar `perfil histórico não disponível` quando a base antiga não permitir comprovar o perfil vigente na data do evento;
 - a partir da V2, salvar snapshot de público e perfil aplicável no momento da publicação de cada AVOP ou apronto;
 - usar o snapshot da publicação como referência da auditoria histórica futura.
+- armazenar o snapshot em formato nominal, com uma linha por militar aplicável e público/perfil considerado;
+- preservar `migrated`, `source`, `source_reference` e `limitation_reason` quando a origem for importação ou quando o perfil histórico não puder ser comprovado.

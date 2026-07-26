@@ -39,3 +39,11 @@ Esta implementação inicial cria a fundação técnica da V2 sem alterar a Cent
 ## Segurança
 
 Nenhum segredo deve ser commitado. Use somente arquivos `.env.*.local` para credenciais reais.
+
+## Migration 0002
+
+`supabase/migrations/0002_publication_history_snapshots.sql` acrescenta a estrutura de histórico de público/perfil e snapshots nominais de publicação.
+
+Essa migration deve ser aplicada após `0001_initial_schema.sql`. Ela não importa dados, não recalcula histórico antigo e não altera registros legados. O objetivo é preservar, a partir da V2, o denominador nominal de cada AVOP e apronto no momento da publicação ou abertura.
+
+Quando a origem for migração e não houver evidência confiável do perfil vigente na época, os registros devem manter a limitação em `limitation_reason`, usando `perfil historico nao disponivel`.

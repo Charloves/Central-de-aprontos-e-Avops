@@ -27,6 +27,8 @@
 - Corrigir mapeamentos sem alterar origem.
 - Preservar registros históricos sem recalcular retroativamente públicos, leituras, presenças ou denominadores.
 - Criar snapshots de público e perfil aplicável somente para publicações realizadas a partir da V2.
+- Criar snapshots nominais para AVOPs e aprontos, com uma linha por militar aplicável no momento da publicação/abertura.
+- Marcar registros migrados e limitações de perfil histórico sem tentar corrigir retroativamente a base antiga.
 
 ## Fase 3 — Funcionalidades
 
@@ -110,6 +112,7 @@ Ordem:
 - amostragem nominal;
 - conferência de registros marcados como `perfil histórico não disponível`;
 - conferência de snapshots de público/perfil para registros criados na V2;
+- conferência de quantidade nominal dos snapshots contra o público aplicável na data da publicação/abertura;
 - validação de todos os links.
 
 ## Critério de publicação

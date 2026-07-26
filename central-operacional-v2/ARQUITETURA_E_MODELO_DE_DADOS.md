@@ -47,10 +47,19 @@ Os arquivos não serão copiados para a aplicação. AVOPs, aprontos e OI perman
 - `id`
 - `profile_id`
 - `audience_id`
+- `audience_code_snapshot`
+- `audience_name_snapshot`
 - `valid_from`
 - `valid_to`
 - `source`
-- `notes`
+- `source_reference`
+- `migrated`
+- `historical_profile_available`
+- `limitation_reason`
+- `metadata`
+- `created_by`
+- `created_at`
+- `updated_at`
 
 Usada quando houver evidência confiável do perfil vigente em determinado período. Quando não houver evidência, a migração deve preservar o registro original e marcar a limitação como `perfil histórico não disponível`, sem reconstruir retroativamente públicos, leituras, presenças ou denominadores.
 
@@ -79,9 +88,35 @@ Usada quando houver evidência confiável do perfil vigente em determinado perí
 - `published_at`
 - `audience_snapshot`
 - `applicable_profile_snapshot`
+- `applicable_profile_count`
+- `historical_limitations`
 - `source_metadata`
 
 A partir da V2, preserva o público aplicável e os perfis considerados no momento da publicação. Esse snapshot é a base para auditoria histórica futura, sem depender de alterações posteriores no efetivo.
+
+### `avop_publication_snapshot_members`
+
+- `snapshot_id`
+- `avop_id`
+- `profile_id`
+- `audience_id`
+- `trigram_snapshot`
+- `name_snapshot`
+- `email_snapshot`
+- `audience_code_snapshot`
+- `audience_name_snapshot`
+- `profile_active_snapshot`
+- `applicable_profile_source`
+- `valid_from`
+- `valid_to`
+- `source`
+- `source_reference`
+- `migrated`
+- `historical_profile_available`
+- `limitation_reason`
+- `metadata`
+
+Tabela nominal do denominador do AVOP no momento da publicação. Ela preserva o vínculo entre militar, perfil/público aplicável e publicação, mesmo que o efetivo atual seja alterado depois.
 
 ### `avop_acknowledgements`
 
@@ -115,9 +150,35 @@ A partir da V2, preserva o público aplicável e os perfis considerados no momen
 - `opened_at`
 - `audience_snapshot`
 - `applicable_profile_snapshot`
+- `applicable_profile_count`
+- `historical_limitations`
 - `source_metadata`
 
 A partir da V2, preserva o público aplicável e os perfis considerados no momento da abertura/publicação do apronto.
+
+### `briefing_publication_snapshot_members`
+
+- `snapshot_id`
+- `briefing_id`
+- `profile_id`
+- `audience_id`
+- `trigram_snapshot`
+- `name_snapshot`
+- `email_snapshot`
+- `audience_code_snapshot`
+- `audience_name_snapshot`
+- `profile_active_snapshot`
+- `applicable_profile_source`
+- `valid_from`
+- `valid_to`
+- `source`
+- `source_reference`
+- `migrated`
+- `historical_profile_available`
+- `limitation_reason`
+- `metadata`
+
+Tabela nominal do denominador do apronto no momento da abertura/publicação. Ela deve ser usada para auditoria histórica de presença, falta e justificativa.
 
 ### `briefing_records`
 
