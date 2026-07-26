@@ -6,11 +6,14 @@ import {
   normalizeUpper,
 } from '../domain/normalization.ts';
 import type {
+  AprontoPayload,
   AvopPayload,
   EfetivoPayload,
+  HistoricalStagingPayload,
   ImportIssue,
   ImportOperation,
   LeituraPayload,
+  PresencaPayload,
   RawRow,
   SheetImportResult,
   SheetKind,
@@ -20,18 +23,23 @@ const REQUIRED_COLUMNS: Record<SheetKind, string[]> = {
   EFETIVO: ['ID', 'NOME', 'ATIVO'],
   AVOPS: ['AVOP_ID', 'TITULO', 'DATA_EMISSAO', 'STATUS', 'PERFIL_ALVO', 'EXIGE_CIENCIA'],
   LEITURAS: ['AVOP_ID', 'ID'],
+  APRONTOS: ['APRONTO_ID', 'TITULO', 'DATA', 'STATUS', 'EXIGE_CIENCIA_MATERIAL'],
+  PRESENCAS: ['APRONTO_ID', 'ID'],
 };
 
 const CANONICAL_AUDIENCES = new Set(['PILOTO', 'TRIPULANTE', 'HSAR', 'TODOS']);
+const KNOWN_BRIEFING_STATUSES = new Set(['ABERTO', 'FECHADO', 'DRAFT']);
+const KNOWN_ATTENDANCE_STATUSES = new Set(['PRESENTE', 'JUSTIFICADO', 'AUSENTE', 'PENDENTE']);
 
 type Parser<TPayload extends Record<string, unknown>> = {
   sheet: SheetKind;
   duplicateKey: (payload: TPayload) => string;
   parseRow: (row: RawRow, rowNumber: number) => ParsedRow<TPayload>;
+  stageDuplicate?: boolean;
 };
 
 type ParsedRow<TPayload extends Record<string, unknown>> =
-  | { ok: true; operation: ImportOperation<TPayload>; normalized: boolean; warnings: ImportIssue[] }
+  | { ok: true; operation: ImportOperation<TPayload | HistoricalStagingPayload>; normalized: boolean; warnings: ImportIssue[] }
   | { ok: false; issues: ImportIssue[] };
 
 export function parseEfetivo(rows: RawRow[]): SheetImportResult<EfetivoPayload> {
@@ -58,12 +66,55 @@ export function parseLeituras(rows: RawRow[]): SheetImportResult<LeituraPayload>
   });
 }
 
+export function parseAprontos(rows: RawRow[]): SheetImportResult<AprontoPayload> {
+  const result = parseSheet(rows, {
+    sheet: 'APRONTOS',
+    duplicateKey: (payload) => payload.briefingId,
+    parseRow: parseAprontoRow,
+  });
+
+  return {
+    ...result,
+    metrics: {
+      aprontos: result.operations.filter((operation) => operation.operation !== 'stage').length,
+      fechados: result.operations
+        .filter((operation) => operation.operation !== 'stage')
+        .map((operation) => operation.payload)
+        .filter(isAprontoPayload)
+        .filter((payload) => payload.status === 'FECHADO').length,
+    },
+  };
+}
+
+export function parsePresencas(rows: RawRow[]): SheetImportResult<PresencaPayload> {
+  const result = parseSheet(rows, {
+    sheet: 'PRESENCAS',
+    duplicateKey: (payload) => `${payload.briefingId}|${payload.trigram}`,
+    parseRow: parsePresencaRow,
+    stageDuplicate: true,
+  });
+
+  return {
+    ...result,
+    metrics: buildPresencaMetrics(
+      result.operations
+        .filter((operation) => operation.operation !== 'stage')
+        .map((operation) => operation.payload)
+        .filter(isPresencaPayload),
+      result.operations
+        .filter((operation) => operation.operation === 'stage')
+        .map((operation) => operation.payload)
+        .filter(isStagingPayload),
+    ),
+  };
+}
+
 function parseSheet<TPayload extends Record<string, unknown>>(
   rows: RawRow[],
   parser: Parser<TPayload>,
 ): SheetImportResult<TPayload> {
   const issues: ImportIssue[] = [];
-  const operations: ImportOperation<TPayload>[] = [];
+  const operations: Array<ImportOperation<TPayload | HistoricalStagingPayload>> = [];
   const seen = new Set<string>();
   let invalid = 0;
   let duplicates = 0;
@@ -96,10 +147,20 @@ function parseSheet<TPayload extends Record<string, unknown>>(
 
     issues.push(...parsed.warnings);
 
-    const duplicateKey = parser.duplicateKey(parsed.operation.payload);
+    if (parsed.operation.operation === 'stage') {
+      operations.push(parsed.operation);
+      if (parsed.normalized) normalized += 1;
+      return;
+    }
+
+    const duplicateKey = parser.duplicateKey(parsed.operation.payload as TPayload);
     if (seen.has(duplicateKey)) {
       duplicates += 1;
-      issues.push(errorIssue(parser.sheet, rowNumber, 'DUPLICATE_ROW', `Registro duplicado para chave ${duplicateKey}.`, row));
+      const issue = errorIssue(parser.sheet, rowNumber, 'DUPLICATE_ROW', `Registro duplicado para chave ${duplicateKey}.`, row);
+      issues.push(issue);
+      if (parser.stageDuplicate) {
+        operations.push(createStagingOperation(parser.sheet, rowNumber, row, parsed.operation.payload, [issue], 'duplicate', duplicateKey));
+      }
       return;
     }
 
@@ -257,6 +318,177 @@ function parseLeituraRow(row: RawRow, rowNumber: number): ParsedRow<LeituraPaylo
   };
 }
 
+function parseAprontoRow(row: RawRow, rowNumber: number): ParsedRow<AprontoPayload> {
+  const originalBriefingId = normalizeText(row.APRONTO_ID);
+  const briefingId = normalizeBriefingId(originalBriefingId);
+  const title = normalizeText(row.TITULO);
+  const eventDate = normalizeIsoDate(row.DATA);
+  const status = normalizeUpper(row.STATUS);
+  const rawAudience = normalizeText(row.PERFIL_ALVO) || normalizeText(row.PUBLICO);
+  const targetAudiences = normalizeAudienceList(rawAudience);
+  const requiresMaterialAcknowledgement = parseYesNo(row.EXIGE_CIENCIA_MATERIAL);
+  const issues = requiredValueIssues('APRONTOS', rowNumber, row, [
+    ['APRONTO_ID', briefingId],
+    ['TITULO', title],
+    ['DATA', eventDate],
+    ['STATUS', status],
+    ['PERFIL_ALVO/PUBLICO', targetAudiences.join(',')],
+    ['EXIGE_CIENCIA_MATERIAL', normalizeText(row.EXIGE_CIENCIA_MATERIAL)],
+  ]);
+  const warnings = [
+    ...unknownAudienceIssues('APRONTOS', rowNumber, row, rawAudience, targetAudiences),
+    ...unknownStatusIssues('APRONTOS', rowNumber, row, status, KNOWN_BRIEFING_STATUSES, 'UNKNOWN_BRIEFING_STATUS'),
+  ];
+
+  if (requiresMaterialAcknowledgement === null) {
+    issues.push(errorIssue('APRONTOS', rowNumber, 'INVALID_MATERIAL_ACK_FLAG', 'EXIGE_CIENCIA_MATERIAL deve ser SIM ou NAO.', row));
+  }
+
+  if (issues.length) return { ok: false, issues };
+
+  const payload: AprontoPayload = {
+    briefingId,
+    title,
+    eventDate,
+    status,
+    targetAudiences,
+    materialUrl: normalizeText(row.LINK_MATERIAL) || null,
+    requiresMaterialAcknowledgement: requiresMaterialAcknowledgement === true,
+    source: 'APRONTOS',
+    originalBriefingId,
+  };
+
+  return {
+    ok: true,
+    normalized: originalBriefingId !== briefingId || rawAudience !== targetAudiences.join(','),
+    warnings,
+    operation: {
+      sheet: 'APRONTOS',
+      operation: 'upsert',
+      idempotencyKey: `briefing:${briefingId}`,
+      payload,
+      original: row,
+    },
+  };
+}
+
+function parsePresencaRow(row: RawRow, rowNumber: number): ParsedRow<PresencaPayload> {
+  const originalBriefingId = normalizeText(row.APRONTO_ID);
+  const originalId = normalizeText(row.ID);
+  const briefingId = normalizeBriefingId(originalBriefingId);
+  const trigram = normalizeTrigram(originalId);
+  const status = normalizeUpper(row.STATUS);
+  const attendanceStatus = status ? parseAttendanceStatus(status) : null;
+  const justificationText = normalizeText(row.OBS) || normalizeText(row.JUSTIFICATIVA) || null;
+  const materialAcknowledged = parseYesNo(row.CIENCIA_MATERIAL) === true;
+  const recordedAt = normalizeOptionalIsoDate(row.DATA || row.DATA_HORA || row.TIMESTAMP);
+  const isAmbiguous = attendanceStatus === null;
+  const issues = requiredValueIssues('PRESENCAS', rowNumber, row, [
+    ['APRONTO_ID', briefingId],
+    ['ID', trigram],
+  ]);
+  const warnings: ImportIssue[] = [];
+
+  if (status && attendanceStatus === null) {
+    warnings.push(
+      warningIssue('PRESENCAS', rowNumber, 'UNKNOWN_ATTENDANCE_STATUS', `Status de presenca desconhecido preservado para auditoria: ${status}.`, row),
+    );
+  }
+
+  if (isAmbiguous) {
+    warnings.push(
+      warningIssue(
+        'PRESENCAS',
+        rowNumber,
+        'AMBIGUOUS_EMPTY_RECORD',
+        'Registro sem status, justificativa ou ciencia de material. Linha preservada sem inventar classificacao.',
+        row,
+      ),
+    );
+  }
+
+  if (justificationText && attendanceStatus !== 'JUSTIFICADO') {
+    warnings.push(
+      warningIssue(
+        'PRESENCAS',
+        rowNumber,
+        'JUSTIFICATION_WITHOUT_JUSTIFIED_STATUS',
+        'Justificativa encontrada sem STATUS JUSTIFICADO. Texto preservado para auditoria.',
+        row,
+      ),
+    );
+  }
+
+  if (isAmbiguous && (status || justificationText || materialAcknowledged)) {
+    warnings.push(
+      warningIssue(
+        'PRESENCAS',
+        rowNumber,
+        'AMBIGUOUS_WITHOUT_DEFINITIVE_STATUS',
+        'Linha possui informacao parcial, mas nao tem attendance_status definitivo para briefing_records.',
+        row,
+      ),
+    );
+  }
+
+  if (issues.length) return { ok: false, issues };
+
+  const payload: PresencaPayload = {
+    briefingId,
+    trigram,
+    attendanceStatus,
+    hasAttendance: attendanceStatus === 'PRESENTE',
+    hasAbsence: attendanceStatus === 'AUSENTE' || attendanceStatus === 'JUSTIFICADO',
+    justificationText,
+    materialAcknowledged,
+    recordedAt,
+    source: 'PRESENCAS',
+    originalBriefingId,
+    originalId,
+  };
+
+  if (isAmbiguous) {
+    return {
+      ok: true,
+      normalized: originalBriefingId !== briefingId || originalId !== trigram,
+      warnings,
+      operation: createStagingOperation(
+        'PRESENCAS',
+        rowNumber,
+        row,
+        {
+          briefingId,
+          trigram,
+          status,
+          attendanceStatus,
+          justificationText,
+          materialAcknowledged,
+          recordedAt,
+          source: 'PRESENCAS',
+          originalBriefingId,
+          originalId,
+        },
+        warnings,
+        'ambiguous',
+        `${briefingId}|${trigram}`,
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    normalized: originalBriefingId !== briefingId || originalId !== trigram || status !== (attendanceStatus ?? status),
+    warnings,
+    operation: {
+      sheet: 'PRESENCAS',
+      operation: 'link',
+      idempotencyKey: `briefing-record:${briefingId}:${trigram}`,
+      payload,
+      original: row,
+    },
+  };
+}
+
 function validateColumns(sheet: SheetKind, rows: RawRow[]): ImportIssue[] {
   const sample = rows[0] ?? {};
   const headers = new Set(Object.keys(sample));
@@ -285,6 +517,22 @@ function parseYesNo(value: unknown): boolean | null {
   if (normalized === 'SIM') return true;
   if (normalized === 'NAO' || normalized === 'NÃO') return false;
   return null;
+}
+
+function parseAttendanceStatus(value: unknown): PresencaPayload['attendanceStatus'] {
+  const normalized = normalizeUpper(value);
+  if (KNOWN_ATTENDANCE_STATUSES.has(normalized)) return normalized as PresencaPayload['attendanceStatus'];
+  return null;
+}
+
+function normalizeBriefingId(value: unknown): string {
+  const raw = normalizeUpper(value);
+  if (!raw) return '';
+
+  const match = raw.match(/^APR\D*(\d{4})\D*(\d{3})$/);
+  if (match) return `APR-${match[1]}-${match[2]}`;
+
+  return raw.replace(/\s+/g, ' ');
 }
 
 function normalizeIsoDate(value: unknown): string {
@@ -337,6 +585,18 @@ function unknownAudienceIssues(
     }));
 }
 
+function unknownStatusIssues(
+  sheet: SheetKind,
+  rowNumber: number,
+  row: RawRow,
+  status: string,
+  known: Set<string>,
+  code: string,
+): ImportIssue[] {
+  if (!status || known.has(status)) return [];
+  return [warningIssue(sheet, rowNumber, code, `Status desconhecido preservado para auditoria: ${status}.`, row)];
+}
+
 function errorIssue(sheet: SheetKind, rowNumber: number, code: string, message: string, raw: RawRow): ImportIssue {
   return {
     sheet,
@@ -346,4 +606,81 @@ function errorIssue(sheet: SheetKind, rowNumber: number, code: string, message: 
     message,
     raw,
   };
+}
+
+function warningIssue(sheet: SheetKind, rowNumber: number, code: string, message: string, raw: RawRow): ImportIssue {
+  return {
+    sheet,
+    rowNumber,
+    severity: 'warning',
+    code,
+    message,
+    raw,
+  };
+}
+
+function buildPresencaMetrics(rows: PresencaPayload[], stagedRows: HistoricalStagingPayload[] = []): Record<string, number> {
+  return {
+    presencas: rows.filter((row) => row.hasAttendance).length,
+    faltas: rows.filter((row) => row.attendanceStatus === 'AUSENTE' || row.attendanceStatus === 'JUSTIFICADO').length,
+    justificativas:
+      rows.filter((row) => row.justificationText).length +
+      stagedRows.filter((row) => isNormalizedValue(row.normalized, 'justificationText')).length,
+    cienciasMaterial:
+      rows.filter((row) => row.materialAcknowledged).length +
+      stagedRows.filter((row) => row.normalized?.materialAcknowledged === true).length,
+    stagingAmbiguos: stagedRows.filter((row) => row.classification === 'ambiguous').length,
+    stagingDuplicados: stagedRows.filter((row) => row.classification === 'duplicate').length,
+  };
+}
+
+function createStagingOperation(
+  sheet: SheetKind,
+  rowNumber: number,
+  original: RawRow,
+  normalized: RawRow | null,
+  issues: ImportIssue[],
+  classification: HistoricalStagingPayload['classification'],
+  sourceKey: string,
+): ImportOperation<HistoricalStagingPayload> {
+  const payload: HistoricalStagingPayload = {
+    sourceSheet: sheet,
+    sourceRecordType: sheet,
+    rowNumber,
+    classification,
+    original,
+    normalized,
+    issues: issues.map(({ severity, code, message }) => ({ severity, code, message })),
+    limitationReason:
+      classification === 'ambiguous'
+        ? 'registro historico ambiguo sem status, justificativa ou ciencia de material'
+        : 'registro historico duplicado preservado para auditoria',
+    migrated: true,
+    resolvedEntityType: null,
+    resolvedEntityId: null,
+  };
+
+  return {
+    sheet,
+    operation: 'stage',
+    idempotencyKey: `staging:${sheet}:${classification}:${rowNumber}:${sourceKey}`,
+    payload,
+    original,
+  };
+}
+
+function isPresencaPayload(payload: PresencaPayload | HistoricalStagingPayload): payload is PresencaPayload {
+  return 'source' in payload && payload.source === 'PRESENCAS';
+}
+
+function isStagingPayload(payload: PresencaPayload | HistoricalStagingPayload): payload is HistoricalStagingPayload {
+  return 'classification' in payload && 'sourceRecordType' in payload;
+}
+
+function isAprontoPayload(payload: AprontoPayload | HistoricalStagingPayload): payload is AprontoPayload {
+  return 'source' in payload && payload.source === 'APRONTOS';
+}
+
+function isNormalizedValue(normalized: RawRow | null, key: string): boolean {
+  return Boolean(normalized?.[key]);
 }

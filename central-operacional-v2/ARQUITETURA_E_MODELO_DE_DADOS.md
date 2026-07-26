@@ -285,3 +285,55 @@ Regra de auditoria histórica:
 - quando não houver evidência do perfil vigente na época, registrar `perfil histórico não disponível`;
 - tratar dashboards atuais baseados no efetivo atual como visão operacional, não como reconstrução histórica exata;
 - usar snapshots de público e perfil aplicável para todo AVOP ou apronto publicado a partir da V2.
+## Staging de importacao historica
+
+### `historical_import_batches`
+
+- `id`
+- `source`
+- `source_reference`
+- `source_file_name`
+- `source_file_hash`
+- `record_type`
+- `dry_run`
+- `migrated`
+- `status`
+- `notes`
+- `metadata`
+- `created_by`
+- `created_at`
+- `updated_at`
+
+Controla lotes de importacao historica. `source_file_hash` e obrigatorio e deve ser SHA-256 calculado sobre os bytes exatos do arquivo de origem antes do parse. A unicidade usa `source`, `coalesce(source_reference, '')` e `source_file_hash`, evitando duplicacao mesmo quando `source_reference` estiver vazio.
+
+### `historical_import_staging_records`
+
+- `id`
+- `batch_id`
+- `source`
+- `source_record_type`
+- `source_row_number`
+- `idempotency_key`
+- `original_content`
+- `normalized_content`
+- `classification` - valid, invalid, ambiguous, duplicate ou imported
+- `issues`
+- `limitation_reason`
+- `migrated`
+- `resolved_entity_type`
+- `resolved_entity_id`
+- `resolved_by`
+- `resolved_at`
+- `resolution_notes`
+- `metadata`
+- `created_by`
+- `created_at`
+- `updated_at`
+
+Preserva linhas historicas que nao podem ser gravadas com seguranca em tabelas definitivas. Exemplo: presenca sem `STATUS`, sem justificativa e sem ciencia de material. Nesses casos, o importador nao inventa `attendance_status`; a linha vai para staging e pode ser resolvida posteriormente por coordenador, mantendo o JSON original intacto.
+
+`original_content` e imutavel por trigger no banco. A resolucao futura deve alterar apenas classificacao, campos de resolucao, referencia definitiva, auditoria e metadados permitidos.
+
+Regra adicional de auditoria historica:
+
+- usar staging de importacao historica para linhas ambiguas, invalidas ou duplicadas que precisem ser preservadas sem alterar o significado do dado.

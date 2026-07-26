@@ -1,4 +1,4 @@
-export type SheetKind = 'EFETIVO' | 'AVOPS' | 'LEITURAS';
+export type SheetKind = 'EFETIVO' | 'AVOPS' | 'LEITURAS' | 'APRONTOS' | 'PRESENCAS';
 
 export type SourceFormat = 'csv' | 'json';
 
@@ -15,7 +15,7 @@ export type ImportIssue = {
 
 export type ImportOperation<TPayload extends Record<string, unknown>> = {
   sheet: SheetKind;
-  operation: 'upsert' | 'link' | 'acknowledge';
+  operation: 'upsert' | 'link' | 'acknowledge' | 'stage';
   idempotencyKey: string;
   payload: TPayload;
   original: RawRow;
@@ -28,8 +28,9 @@ export type SheetImportResult<TPayload extends Record<string, unknown>> = {
   invalid: number;
   duplicates: number;
   normalized: number;
+  metrics?: Record<string, number>;
   issues: ImportIssue[];
-  operations: ImportOperation<TPayload>[];
+  operations: Array<ImportOperation<TPayload | HistoricalStagingPayload>>;
 };
 
 export type ImportReport = {
@@ -43,6 +44,7 @@ export type ImportReport = {
     duplicates: number;
     normalized: number;
     operations: number;
+    metrics: Record<string, number>;
   };
 };
 
@@ -76,4 +78,44 @@ export type LeituraPayload = {
   source: 'LEITURAS';
   originalAvopId: string;
   originalId: string;
+};
+
+export type AprontoPayload = {
+  briefingId: string;
+  title: string;
+  eventDate: string;
+  status: string;
+  targetAudiences: string[];
+  materialUrl: string | null;
+  requiresMaterialAcknowledgement: boolean;
+  source: 'APRONTOS';
+  originalBriefingId: string;
+};
+
+export type PresencaPayload = {
+  briefingId: string;
+  trigram: string;
+  attendanceStatus: 'PRESENTE' | 'JUSTIFICADO' | 'AUSENTE' | 'PENDENTE' | null;
+  hasAttendance: boolean;
+  hasAbsence: boolean;
+  justificationText: string | null;
+  materialAcknowledged: boolean;
+  recordedAt: string | null;
+  source: 'PRESENCAS';
+  originalBriefingId: string;
+  originalId: string;
+};
+
+export type HistoricalStagingPayload = {
+  sourceSheet: SheetKind;
+  sourceRecordType: string;
+  rowNumber: number;
+  classification: 'valid' | 'invalid' | 'ambiguous' | 'duplicate' | 'imported';
+  original: RawRow;
+  normalized: RawRow | null;
+  issues: Array<Pick<ImportIssue, 'severity' | 'code' | 'message'>>;
+  limitationReason: string;
+  migrated: boolean;
+  resolvedEntityType: string | null;
+  resolvedEntityId: string | null;
 };

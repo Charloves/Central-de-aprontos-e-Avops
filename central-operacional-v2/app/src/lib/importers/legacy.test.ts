@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCsv } from './csv';
-import { parseAvops, parseEfetivo, parseLeituras } from './legacy';
+import { parseAprontos, parseAvops, parseEfetivo, parseLeituras, parsePresencas } from './legacy';
 import { buildImportReport } from './report';
 
 describe('legacy importers', () => {
@@ -56,7 +56,7 @@ describe('legacy importers', () => {
     ]);
 
     expect(result).toMatchObject({ valid: 1, invalid: 0 });
-    expect(result.operations[0].payload.audiences).toEqual(['PILOTO', 'MECANICO']);
+    expect(result.operations[0].payload).toMatchObject({ audiences: ['PILOTO', 'MECANICO'] });
     expect(result.issues).toMatchObject([{ severity: 'warning', code: 'UNKNOWN_AUDIENCE' }]);
   });
 
@@ -77,7 +77,7 @@ describe('legacy importers', () => {
       },
     ]);
 
-    expect(result.operations[0].payload.publicationDate).toBe(expected);
+    expect(result.operations[0].payload).toMatchObject({ publicationDate: expected });
   });
 
   it('rejeita data invalida', () => {
@@ -133,6 +133,185 @@ describe('legacy importers', () => {
     expect(text).not.toContain('Militar Alfa');
     expect(text).not.toContain('alfa@example.test');
     expect(text).toContain('profile:ABC');
+    expect(text).toContain('[REDACTED]');
+  });
+
+  it('normaliza apronto valido, fechado e legado', () => {
+    const result = parseAprontos([
+      {
+        APRONTO_ID: 'APR 2026 001',
+        TITULO: 'Apronto ficticio aberto',
+        DATA: '16/03/2026',
+        PERFIL_ALVO: 'PILOTO',
+        STATUS: 'ABERTO',
+        LINK_MATERIAL: 'https://example.test/apronto-001',
+        EXIGE_CIENCIA_MATERIAL: 'SIM',
+      },
+      {
+        APRONTO_ID: 'APR-2026-002',
+        TITULO: 'Apronto ficticio fechado',
+        DATA: '2026-03-17T23:30:00-03:00',
+        PUBLICO: 'TODOS',
+        STATUS: 'FECHADO',
+        LINK_MATERIAL: '',
+        EXIGE_CIENCIA_MATERIAL: 'NAO',
+      },
+    ]);
+
+    expect(result).toMatchObject({ valid: 2, invalid: 0, normalized: 1 });
+    expect(result.metrics).toMatchObject({ aprontos: 2, fechados: 1 });
+    expect(result.operations[0]).toMatchObject({
+      idempotencyKey: 'briefing:APR-2026-001',
+      payload: { briefingId: 'APR-2026-001', eventDate: '2026-03-16', requiresMaterialAcknowledgement: true },
+    });
+    expect(result.operations[1].payload).toMatchObject({ eventDate: '2026-03-17' });
+  });
+
+  it('preserva registro de presenca com campos finais vazios', () => {
+    const result = parsePresencas([{ DATA: '16/03/2026', APRONTO_ID: 'APR-2026-001', ID: 'abc', STATUS: 'PRESENTE', OBS: '', CIENCIA_MATERIAL: '', EXTRA: '' }]);
+
+    expect(result).toMatchObject({ valid: 1, invalid: 0 });
+    expect(result.operations[0].payload).toMatchObject({
+      briefingId: 'APR-2026-001',
+      trigram: 'ABC',
+      attendanceStatus: 'PRESENTE',
+      hasAttendance: true,
+      justificationText: null,
+      materialAcknowledged: false,
+    });
+  });
+
+  it('diferencia falta, justificativa e ciencia de material', () => {
+    const result = parsePresencas([
+      { DATA: '16/03/2026', APRONTO_ID: 'APR-2026-001', ID: 'abc', STATUS: 'AUSENTE', OBS: '', CIENCIA_MATERIAL: '' },
+      {
+        DATA: '16/03/2026',
+        APRONTO_ID: 'APR-2026-001',
+        ID: 'def',
+        STATUS: 'JUSTIFICADO',
+        OBS: 'Texto ficticio de justificativa',
+        CIENCIA_MATERIAL: 'SIM',
+      },
+    ]);
+
+    expect(result).toMatchObject({ valid: 2, invalid: 0 });
+    expect(result.metrics).toMatchObject({ presencas: 0, faltas: 2, justificativas: 1, cienciasMaterial: 1 });
+    expect(result.operations[1].payload).toMatchObject({
+      hasAbsence: true,
+      justificationText: 'Texto ficticio de justificativa',
+      materialAcknowledged: true,
+    });
+  });
+
+  it('preserva primeiro registro valido em duplicidade por apronto e trigrama', () => {
+    const result = parsePresencas([
+      { DATA: '16/03/2026', APRONTO_ID: 'APR-2026-001', ID: 'abc', STATUS: 'PRESENTE', OBS: '', CIENCIA_MATERIAL: '' },
+      { DATA: '17/03/2026', APRONTO_ID: 'APR 2026 001', ID: 'ABC', STATUS: 'JUSTIFICADO', OBS: 'Duplicado ficticio', CIENCIA_MATERIAL: 'SIM' },
+    ]);
+
+    expect(result).toMatchObject({ valid: 1, duplicates: 1 });
+    expect(result.operations[0].payload).toMatchObject({ attendanceStatus: 'PRESENTE' });
+    expect(result.operations[0].idempotencyKey).toBe('briefing-record:APR-2026-001:ABC');
+    expect(result.operations[1]).toMatchObject({
+      operation: 'stage',
+      idempotencyKey: 'staging:PRESENCAS:duplicate:3:APR-2026-001|ABC',
+      payload: { classification: 'duplicate' },
+    });
+  });
+
+  it.each([
+    ['16/03/2026', '2026-03-16'],
+    ['2026-03-16', '2026-03-16'],
+    ['2026-03-16T23:30:00+03:00', '2026-03-16'],
+    ['2026-03-16T00:30:00-03:00', '2026-03-16'],
+  ])('normaliza data de presenca sem deslocar dia: %s', (input, expected) => {
+    const result = parsePresencas([{ DATA: input, APRONTO_ID: 'APR-2026-001', ID: 'abc', STATUS: 'PRESENTE' }]);
+    expect(result.operations[0].payload).toMatchObject({ recordedAt: expected });
+  });
+
+  it('emite warning para registro ambiguo sem inventar classificacao', () => {
+    const result = parsePresencas([{ DATA: '16/03/2026', APRONTO_ID: 'APR-2026-001', ID: 'abc', STATUS: '', OBS: '', CIENCIA_MATERIAL: '' }]);
+
+    expect(result).toMatchObject({ valid: 1, invalid: 0 });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'stage',
+      idempotencyKey: 'staging:PRESENCAS:ambiguous:2:APR-2026-001|ABC',
+      payload: {
+        sourceSheet: 'PRESENCAS',
+        classification: 'ambiguous',
+        limitationReason: 'registro historico ambiguo sem status, justificativa ou ciencia de material',
+        resolvedEntityType: null,
+        resolvedEntityId: null,
+      },
+    });
+    expect(JSON.stringify(result.operations[0].payload)).not.toContain('"attendanceStatus":"PRESENTE"');
+    expect(JSON.stringify(result.operations[0].payload)).not.toContain('"attendanceStatus":"AUSENTE"');
+    expect(result.issues).toMatchObject([{ severity: 'warning', code: 'AMBIGUOUS_EMPTY_RECORD' }]);
+  });
+
+  it('preserva original e normalizado parcial no staging ambiguo', () => {
+    const result = parsePresencas([{ DATA: '16/03/2026', APRONTO_ID: 'APR 2026 001', ID: 'abc', STATUS: '', OBS: '', CIENCIA_MATERIAL: '' }]);
+    const payload = result.operations[0].payload;
+
+    expect(result.operations[0].operation).toBe('stage');
+    expect(payload).toMatchObject({
+      original: { APRONTO_ID: 'APR 2026 001', ID: 'abc' },
+      normalized: { briefingId: 'APR-2026-001', trigram: 'ABC', recordedAt: '2026-03-16' },
+    });
+  });
+
+  it('mantem idempotencia deterministica do staging', () => {
+    const row = { DATA: '16/03/2026', APRONTO_ID: 'APR-2026-001', ID: 'abc', STATUS: '', OBS: '', CIENCIA_MATERIAL: '' };
+    const first = parsePresencas([row]);
+    const second = parsePresencas([row]);
+
+    expect(first.operations[0].idempotencyKey).toBe(second.operations[0].idempotencyKey);
+  });
+
+  it('permite vinculo futuro do staging com registro definitivo sem apagar original', () => {
+    const result = parsePresencas([{ DATA: '16/03/2026', APRONTO_ID: 'APR-2026-001', ID: 'abc', STATUS: '', OBS: '', CIENCIA_MATERIAL: '' }]);
+
+    expect(result.operations[0].payload).toMatchObject({
+      original: { APRONTO_ID: 'APR-2026-001', ID: 'abc' },
+      resolvedEntityType: null,
+      resolvedEntityId: null,
+    });
+  });
+
+  it('redact oculta justificativa sem remover chave idempotente', () => {
+    const sheet = parsePresencas([
+      {
+        DATA: '16/03/2026',
+        APRONTO_ID: 'APR-2026-001',
+        ID: 'abc',
+        STATUS: 'JUSTIFICADO',
+        OBS: 'Texto pessoal ficticio',
+        CIENCIA_MATERIAL: 'SIM',
+      },
+    ]);
+    const report = buildImportReport([sheet], '2026-01-01T00:00:00.000Z', { redact: true });
+    const text = JSON.stringify(report);
+
+    expect(text).not.toContain('Texto pessoal ficticio');
+    expect(text).toContain('briefing-record:APR-2026-001:ABC');
+    expect(text).toContain('[REDACTED]');
+  });
+
+  it('redact sanitiza conteudo aninhado de staging', () => {
+    const sheet = parsePresencas([
+      {
+        DATA: '16/03/2026',
+        APRONTO_ID: 'APR-2026-001',
+        ID: 'abc',
+        STATUS: 'PENDENTE_MANUAL',
+        OBS: 'Texto pessoal ficticio',
+        CIENCIA_MATERIAL: '',
+      },
+    ]);
+    const report = buildImportReport([sheet], '2026-01-01T00:00:00.000Z', { redact: true });
+    const text = JSON.stringify(report);
+
+    expect(text).not.toContain('Texto pessoal ficticio');
     expect(text).toContain('[REDACTED]');
   });
 });

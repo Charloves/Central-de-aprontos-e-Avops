@@ -50,6 +50,16 @@ Quando a origem for migração e não houver evidência confiável do perfil vig
 
 ## Importacao em dry-run
 
-`npm run import:dry-run` executa os importadores locais iniciais para `EFETIVO`, `AVOPS` e `LEITURAS` usando fixtures ficticias. A rotina nao acessa a planilha oficial, nao usa Apps Script e nao grava no Supabase.
+`npm run import:dry-run` executa os importadores locais iniciais para `EFETIVO`, `AVOPS`, `LEITURAS`, `APRONTOS` e `PRESENCAS` usando fixtures ficticias. A rotina nao acessa a planilha oficial, nao usa Apps Script e nao grava no Supabase.
 
-Use `npm run import:dry-run -- --redact` quando o relatorio precisar ser compartilhado sem expor nome e e-mail. O formato esperado dos arquivos esta documentado em `docs/IMPORTACAO_DRY_RUN.md`.
+Use `npm run import:dry-run -- --redact` quando o relatorio precisar ser compartilhado sem expor nome, e-mail ou justificativas. O formato esperado dos arquivos esta documentado em `docs/IMPORTACAO_DRY_RUN.md`.
+
+## Staging historico
+
+`supabase/migrations/0003_historical_import_staging.sql` cria uma estrutura generica para lotes de importacao e registros historicos em staging.
+
+Linhas ambiguas de `PRESENCAS`, como registros sem status, justificativa ou ciencia de material, nao sao preparadas para `briefing_records`, pois `briefing_records.attendance_status` permanece `NOT NULL`. Nesses casos o dry-run gera uma operacao `stage`, preservando o conteudo original, o conteudo normalizado parcial, os warnings e a razao da limitacao.
+
+A identidade do lote usa `source_file_hash`, obrigatorio, calculado futuramente pelo importador como SHA-256 dos bytes exatos do arquivo de origem. A migration usa indice unico com `coalesce(source_reference, '')` para impedir lote duplicado mesmo quando nao houver referencia externa.
+
+A resolucao futura deve ser feita por coordenador/admin: o registro definitivo pode ser criado ou vinculado e, depois disso, o staging recebe `resolved_entity_type`, `resolved_entity_id`, `resolved_by`, `resolved_at` e `resolution_notes`. O JSON original nao deve ser apagado nem alterado. O banco bloqueia update de `original_content` por trigger.

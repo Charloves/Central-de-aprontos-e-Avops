@@ -1,9 +1,19 @@
-import { buildImportReport, parseAvops, parseEfetivo, parseLeituras, readRowsFromFile } from '../src/lib/importers/index.ts';
+import {
+  buildImportReport,
+  parseAprontos,
+  parseAvops,
+  parseEfetivo,
+  parseLeituras,
+  parsePresencas,
+  readRowsFromFile,
+} from '../src/lib/importers/index.ts';
 
 type ImportArgs = {
   efetivo?: string;
   avops?: string;
   leituras?: string;
+  aprontos?: string;
+  presencas?: string;
   redact?: boolean;
 };
 
@@ -25,8 +35,18 @@ if (args.leituras) {
   sheets.push(parseLeituras(rows));
 }
 
+if (args.aprontos) {
+  const { rows } = readRowsFromFile(args.aprontos);
+  sheets.push(parseAprontos(rows));
+}
+
+if (args.presencas) {
+  const { rows } = readRowsFromFile(args.presencas);
+  sheets.push(parsePresencas(rows));
+}
+
 if (!sheets.length) {
-  throw new Error('Informe pelo menos um arquivo: --efetivo, --avops ou --leituras.');
+  throw new Error('Informe pelo menos um arquivo: --efetivo, --avops, --leituras, --aprontos ou --presencas.');
 }
 
 const report = buildImportReport(sheets, new Date().toISOString(), { redact: args.redact });
@@ -51,6 +71,8 @@ function parseArgs(values: string[]): ImportArgs {
     if (key === '--efetivo') out.efetivo = value;
     else if (key === '--avops') out.avops = value;
     else if (key === '--leituras') out.leituras = value;
+    else if (key === '--aprontos') out.aprontos = value;
+    else if (key === '--presencas') out.presencas = value;
     else throw new Error(`Argumento desconhecido: ${key}`);
 
     i += 1;

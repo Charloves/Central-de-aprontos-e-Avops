@@ -28,6 +28,8 @@ O comando padrao usa fixtures ficticias em:
 - `fixtures/import/efetivo.csv`
 - `fixtures/import/avops.csv`
 - `fixtures/import/leituras.csv`
+- `fixtures/import/aprontos.csv`
+- `fixtures/import/presencas.csv`
 
 ## Formatos aceitos
 
@@ -99,6 +101,74 @@ Colunas opcionais reconhecidas:
 
 Regra: a chave idempotente da leitura e formada por AVOP normalizado e trigrama normalizado. Duplicidades sao reportadas e nao interrompem o processamento.
 
+### APRONTOS
+
+Colunas obrigatorias:
+
+- `APRONTO_ID`
+- `TITULO`
+- `DATA`
+- `STATUS`
+- `EXIGE_CIENCIA_MATERIAL`
+
+Uma das colunas abaixo tambem deve existir e conter valor:
+
+- `PERFIL_ALVO`
+- `PUBLICO`
+
+Colunas opcionais reconhecidas:
+
+- `LINK_MATERIAL`
+
+Regra: identificadores como `APR 2026 001` e `APR-2026-001` sao normalizados para `APR-2026-001`.
+
+Estados conhecidos:
+
+- `ABERTO`
+- `FECHADO`
+- `DRAFT`
+
+Estados desconhecidos geram warning nao fatal e sao preservados para auditoria.
+
+### PRESENCAS
+
+Colunas obrigatorias:
+
+- `APRONTO_ID`
+- `ID`
+
+Colunas opcionais reconhecidas:
+
+- `DATA`
+- `DATA_HORA`
+- `TIMESTAMP`
+- `STATUS`
+- `OBS`
+- `JUSTIFICATIVA`
+- `CIENCIA_MATERIAL`
+
+Estados conhecidos:
+
+- `PRESENTE`
+- `JUSTIFICADO`
+- `AUSENTE`
+- `PENDENTE`
+
+O importador diferencia:
+
+- presenca: `STATUS = PRESENTE`;
+- falta: `STATUS = AUSENTE` ou `STATUS = JUSTIFICADO`;
+- justificativa: texto em `OBS` ou `JUSTIFICATIVA`;
+- ciencia de material: `CIENCIA_MATERIAL = SIM`.
+
+Campos finais vazios sao preservados e nao sao tratados automaticamente como erro. Linhas com `APRONTO_ID` e `ID`, mas sem status, justificativa ou ciencia de material, geram warning `AMBIGUOUS_EMPTY_RECORD` e continuam no relatorio sem inventar classificacao.
+
+A chave idempotente da presenca e formada por apronto normalizado e trigrama normalizado. Quando houver duplicidade na mesma chave, o dry-run preserva o primeiro registro valido, reporta `DUPLICATE_ROW` e mantem a linha original duplicada nos problemas para auditoria.
+
+Quando uma linha tiver `APRONTO_ID` e `ID`, mas nao tiver `STATUS`, justificativa ou ciencia de material, o importador nao inventa presenca, falta ou justificativa. A linha gera uma operacao `stage`, com classificacao `ambiguous`, para futura analise manual.
+
+Duplicidades historicas de `PRESENCAS` tambem geram operacao `stage` com classificacao `duplicate`, alem do issue `DUPLICATE_ROW`. Isso permite preservar o registro original sem duplicar a escrita futura em `briefing_records`.
+
 ## Relatorio
 
 O relatorio JSON contem:
@@ -110,8 +180,29 @@ O relatorio JSON contem:
 - `normalized`: linhas em que algum valor foi normalizado;
 - `issues`: problemas por linha;
 - `operations`: operacoes idempotentes preparadas para futura gravacao.
+- `metrics`: contagens especificas por tipo de registro quando a aba possuir metricas proprias.
 
-Por padrao, o relatorio preserva os valores originais para auditoria, incluindo nome e e-mail quando existirem. Relatorios gerados a partir de dados reais nao devem ser compartilhados sem sanitizacao. Use `--redact` para ocultar `NOME`, `EMAIL`, `name` e `email` no JSON gerado.
+Para aprontos e presencas, as metricas incluem contagens como `aprontos`, `fechados`, `presencas`, `faltas`, `justificativas` e `cienciasMaterial`.
+
+Para staging de presencas, as metricas tambem incluem `stagingAmbiguos` e `stagingDuplicados`.
+
+Por padrao, o relatorio preserva os valores originais para auditoria, incluindo nome, e-mail e justificativas quando existirem. Relatorios gerados a partir de dados reais nao devem ser compartilhados sem sanitizacao. Use `--redact` para ocultar `NOME`, `EMAIL`, `name`, `OBS`, `JUSTIFICATIVA` e `justificationText` no JSON gerado.
+
+O `--redact` tambem sanitiza conteudos aninhados de staging, incluindo `original`, `normalized`, `original_content` e payloads preparados para compartilhamento.
+
+## Resolucao futura de staging
+
+Um coordenador devera revisar cada registro em staging e escolher uma das opcoes:
+
+- vincular a um registro definitivo ja existente;
+- criar um registro definitivo com classificacao explicita;
+- manter a linha como limitacao historica documentada.
+
+A resolucao deve preencher `resolved_entity_type`, `resolved_entity_id`, `resolved_by`, `resolved_at` e `resolution_notes`. O conteudo original em JSONB deve permanecer inalterado para auditoria. A migration de staging bloqueia alteracoes em `original_content` com trigger.
+
+## Identidade do lote
+
+Quando a gravacao real for implementada, cada lote devera receber `source_file_hash` obrigatorio. O algoritmo definido e SHA-256 calculado sobre os bytes exatos do arquivo local antes do parse. A unicidade do lote considera `source`, `coalesce(source_reference, '')` e `source_file_hash`, para que reprocessar o mesmo arquivo nao crie duplicacao mesmo sem referencia externa.
 
 ## Limite historico
 
