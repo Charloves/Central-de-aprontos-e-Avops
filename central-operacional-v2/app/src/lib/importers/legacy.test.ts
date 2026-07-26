@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCsv } from './csv';
-import { parseAprontos, parseAvops, parseEfetivo, parseLeituras, parsePresencas } from './legacy';
+import { parseAprontos, parseAvops, parseEfetivo, parseLeituras, parseOiH125, parseOiH50, parsePresencas } from './legacy';
 import { buildImportReport } from './report';
 
 describe('legacy importers', () => {
@@ -232,7 +232,7 @@ describe('legacy importers', () => {
   it('emite warning para registro ambiguo sem inventar classificacao', () => {
     const result = parsePresencas([{ DATA: '16/03/2026', APRONTO_ID: 'APR-2026-001', ID: 'abc', STATUS: '', OBS: '', CIENCIA_MATERIAL: '' }]);
 
-    expect(result).toMatchObject({ valid: 1, invalid: 0 });
+    expect(result).toMatchObject({ valid: 0, invalid: 0, metrics: { stagingAmbiguos: 1 } });
     expect(result.operations[0]).toMatchObject({
       operation: 'stage',
       idempotencyKey: 'staging:PRESENCAS:ambiguous:2:APR-2026-001|ABC',
@@ -312,6 +312,349 @@ describe('legacy importers', () => {
     const text = JSON.stringify(report);
 
     expect(text).not.toContain('Texto pessoal ficticio');
+    expect(text).toContain('[REDACTED]');
+  });
+
+  it('normaliza OI H50 e preserva link original do Drive', () => {
+    const result = parseOiH50([
+      {
+        OI_KEY: ' pesop | spfo-1 | 01he01 | fase_alfa ',
+        PROGRAMA: 'pesop',
+        SUBPROGRAMA: 'spfo-1',
+        FASE_ID: '01he01',
+        TITULO: 'Fase ficticia alfa',
+        PDF_URL: 'https://drive.google.com/file/d/fake-h50-full/view',
+        PDF_FASE_URL: 'https://drive.google.com/file/d/fake-h50-phase/view',
+        PAG_INICIAL: '10',
+        PAG_FINAL: '12',
+        TIPO: 'fase_alfa',
+        STATUS: 'ativo',
+        CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa',
+        MISSOES: '01HE01D01 01HE01D18',
+      },
+    ]);
+
+    expect(result).toMatchObject({ valid: 1, invalid: 0, duplicates: 0, normalized: 1 });
+    expect(result.metrics).toMatchObject({ oiH50: 1, validosOi: 1 });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'upsert',
+      idempotencyKey: 'oi:H50:PESOP|SPFO-1|01HE01|FASE_ALFA',
+      payload: {
+        aircraft: 'H50',
+        oiKey: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+        phaseId: '01HE01',
+        driveUrl: 'https://drive.google.com/file/d/fake-h50-phase/view',
+        driveFileId: 'fake-h50-phase',
+        missionCodes: ['01HE01D01', '01HE01D18'],
+      },
+    });
+  });
+
+  it('distingue H50 e H125 para a mesma fase e missao', () => {
+    const h50 = parseOiH50([
+      {
+        OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-1',
+        FASE_ID: '01HE01',
+        TITULO: 'Fase ficticia alfa H50',
+        PDF_URL: '',
+        PDF_FASE_URL: 'https://drive.google.com/file/d/fake-h50-phase/view',
+        PAG_INICIAL: '10',
+        PAG_FINAL: '12',
+        TIPO: 'FASE_ALFA',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa H50',
+        MISSOES: '01HE01D01',
+      },
+    ]);
+    const h125 = parseOiH125([
+      {
+        OI_KEY: 'PESOP|SPHA-1|01HE01|FASE_ALFA',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPHA-1',
+        FASE_ID: '01HE01',
+        TITULO: 'Fase ficticia alfa H125',
+        PDF_URL: '',
+        PDF_FASE_URL: 'https://drive.google.com/file/d/fake-h125-phase/view',
+        PAG_INICIAL: '11',
+        PAG_FINAL: '13',
+        TIPO: 'FASE_ALFA',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa H125',
+        MISSOES: '01HE01D01',
+      },
+    ]);
+
+    expect(h50.operations[0].idempotencyKey).toBe('oi:H50:PESOP|SPFO-1|01HE01|FASE_ALFA');
+    expect(h125.operations[0].idempotencyKey).toBe('oi:H125:PESOP|SPHA-1|01HE01|FASE_ALFA');
+  });
+
+  it('envia OI sem link para staging invalido', () => {
+    const result = parseOiH50([
+      {
+        OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-1',
+        FASE_ID: '01HE01',
+        TITULO: 'Fase ficticia sem link',
+        PDF_URL: '',
+        PDF_FASE_URL: '',
+        PAG_INICIAL: '10',
+        PAG_FINAL: '12',
+        TIPO: 'FASE_ALFA',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '01HE01 - Fase ficticia sem link',
+        MISSOES: '01HE01D01',
+      },
+    ]);
+
+    expect(result).toMatchObject({ valid: 0, invalid: 1 });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'stage',
+      idempotencyKey: 'staging:OI_H50:invalid:2:H50|PESOP|SPFO-1|01HE01|FASE_ALFA',
+      payload: { classification: 'invalid' },
+    });
+  });
+
+  it('aceita formatos legitimos de link do Google Drive e extrai driveFileId', () => {
+    const result = parseOiH50([
+      {
+        OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-1',
+        FASE_ID: '01HE01',
+        TITULO: 'Fase ficticia alfa',
+        PDF_URL: 'https://drive.google.com/file/d/fake-file-id/view',
+        PDF_FASE_URL: '',
+        PAG_INICIAL: '10',
+        PAG_FINAL: '12',
+        TIPO: 'FASE_ALFA',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa',
+        MISSOES: '01HE01D01',
+      },
+      {
+        OI_KEY: 'PESOP|SPFO-2|02HE02|FASE_BRAVO',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-2',
+        FASE_ID: '02HE02',
+        TITULO: 'Fase ficticia bravo',
+        PDF_URL: 'https://drive.google.com/open?id=fake-open-id',
+        PDF_FASE_URL: '',
+        PAG_INICIAL: '20',
+        PAG_FINAL: '22',
+        TIPO: 'FASE_BRAVO',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '02HE02 - Fase ficticia bravo',
+        MISSOES: '02HE02D01',
+      },
+      {
+        OI_KEY: 'PESOP|SPFO-3|03HE03|FASE_CHARLIE',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-3',
+        FASE_ID: '03HE03',
+        TITULO: 'Fase ficticia charlie',
+        PDF_URL: 'https://drive.google.com/uc?export=download&id=fake-uc-id',
+        PDF_FASE_URL: '',
+        PAG_INICIAL: '30',
+        PAG_FINAL: '32',
+        TIPO: 'FASE_CHARLIE',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '03HE03 - Fase ficticia charlie',
+        MISSOES: '03HE03D01',
+      },
+    ]);
+
+    expect(result).toMatchObject({ valid: 3, invalid: 0 });
+    expect(result.operations.map((operation) => operation.payload).filter((payload) => 'driveFileId' in payload)).toMatchObject([
+      { driveFileId: 'fake-file-id' },
+      { driveFileId: 'fake-open-id' },
+      { driveFileId: 'fake-uc-id' },
+    ]);
+  });
+
+  it('envia link nao reconhecido como Google Drive para staging invalido preservando original', () => {
+    const result = parseOiH50([
+      {
+        OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-1',
+        FASE_ID: '01HE01',
+        TITULO: 'Fase ficticia alfa',
+        PDF_URL: 'https://example.test/documento.pdf',
+        PDF_FASE_URL: '',
+        PAG_INICIAL: '10',
+        PAG_FINAL: '12',
+        TIPO: 'FASE_ALFA',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa',
+        MISSOES: '01HE01D01',
+      },
+    ]);
+
+    expect(result).toMatchObject({ valid: 0, invalid: 1 });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'stage',
+      payload: {
+        classification: 'invalid',
+        original: { PDF_URL: 'https://example.test/documento.pdf' },
+      },
+    });
+    expect(result.issues).toMatchObject([{ code: 'INVALID_DRIVE_URL' }]);
+  });
+
+  it('preserva OI inativa na importacao sem tratar como invalida', () => {
+    const result = parseOiH50([
+      {
+        OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-1',
+        FASE_ID: '01HE01',
+        TITULO: 'Fase ficticia alfa',
+        PDF_URL: 'https://drive.google.com/file/d/fake-h50-phase/view',
+        PDF_FASE_URL: '',
+        PAG_INICIAL: '10',
+        PAG_FINAL: '12',
+        TIPO: 'FASE_ALFA',
+        STATUS: 'INATIVO',
+        CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa',
+        MISSOES: '01HE01D01',
+      },
+    ]);
+
+    expect(result).toMatchObject({ valid: 1, invalid: 0 });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'upsert',
+      payload: { status: 'INATIVO', active: false },
+    });
+  });
+
+  it('envia intervalo de paginas invalido para staging preservando valores originais', () => {
+    const result = parseOiH50([
+      {
+        OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-1',
+        FASE_ID: '01HE01',
+        TITULO: 'Fase ficticia alfa',
+        PDF_URL: 'https://drive.google.com/file/d/fake-h50-phase/view',
+        PDF_FASE_URL: '',
+        PAG_INICIAL: '12',
+        PAG_FINAL: '10',
+        TIPO: 'FASE_ALFA',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa',
+        MISSOES: '01HE01D01',
+      },
+    ]);
+
+    expect(result).toMatchObject({ valid: 0, invalid: 1 });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'stage',
+      payload: {
+        classification: 'invalid',
+        original: { PAG_INICIAL: '12', PAG_FINAL: '10' },
+      },
+    });
+    expect(result.issues).toMatchObject([{ code: 'INVALID_PAGE_RANGE' }]);
+  });
+
+  it('envia OI com missao fora da fase para staging ambiguo', () => {
+    const result = parseOiH125([
+      {
+        OI_KEY: 'PEVOP|SPHA-2|04HE04|FASE_DELTA',
+        PROGRAMA: 'PEVOP',
+        SUBPROGRAMA: 'SPHA-2',
+        FASE_ID: '04HE04',
+        TITULO: 'Fase ficticia delta',
+        PDF_URL: '',
+        PDF_FASE_URL: 'https://drive.google.com/file/d/fake-h125-delta/view',
+        PAG_INICIAL: '40',
+        PAG_FINAL: '42',
+        TIPO: 'FASE_DELTA',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '04HE04 - Fase ficticia delta',
+        MISSOES: '04HE04D01 04HE99D02',
+      },
+    ]);
+
+    expect(result).toMatchObject({ valid: 0, invalid: 0 });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'stage',
+      idempotencyKey: 'staging:OI_H125:ambiguous:2:H125|PEVOP|SPHA-2|04HE04|FASE_DELTA',
+      payload: { classification: 'ambiguous' },
+    });
+    expect(result.issues).toMatchObject([{ code: 'MISSION_PHASE_MISMATCH' }]);
+  });
+
+  it('envia duplicidade de OI para staging sem eliminar o primeiro valido', () => {
+    const row = {
+      OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+      PROGRAMA: 'PESOP',
+      SUBPROGRAMA: 'SPFO-1',
+      FASE_ID: '01HE01',
+      TITULO: 'Fase ficticia alfa',
+      PDF_URL: '',
+      PDF_FASE_URL: 'https://drive.google.com/file/d/fake-h50-phase/view',
+      PAG_INICIAL: '10',
+      PAG_FINAL: '12',
+      TIPO: 'FASE_ALFA',
+      STATUS: 'ATIVO',
+      CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa',
+      MISSOES: '01HE01D01',
+    };
+
+    const result = parseOiH50([row, { ...row, TITULO: 'Fase ficticia alfa duplicada' }]);
+
+    expect(result).toMatchObject({ valid: 1, duplicates: 1 });
+    expect(result.operations[0]).toMatchObject({ operation: 'upsert' });
+    expect(result.operations[1]).toMatchObject({ operation: 'stage', payload: { classification: 'duplicate' } });
+  });
+
+  it('mantem idempotencia deterministica da OI', () => {
+    const row = {
+      OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+      PROGRAMA: 'PESOP',
+      SUBPROGRAMA: 'SPFO-1',
+      FASE_ID: '01HE01',
+      TITULO: 'Fase ficticia alfa',
+      PDF_URL: '',
+      PDF_FASE_URL: 'https://drive.google.com/file/d/fake-h50-phase/view',
+      PAG_INICIAL: '10',
+      PAG_FINAL: '12',
+      TIPO: 'FASE_ALFA',
+      STATUS: 'ATIVO',
+      CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa',
+      MISSOES: '01HE01D01',
+    };
+
+    expect(parseOiH50([row]).operations[0].idempotencyKey).toBe(parseOiH50([row]).operations[0].idempotencyKey);
+  });
+
+  it('redact oculta titulo e chave de exibicao de OI em relatorio compartilhavel', () => {
+    const sheet = parseOiH50([
+      {
+        OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-1',
+        FASE_ID: '01HE01',
+        TITULO: 'Texto operacional ficticio',
+        PDF_URL: '',
+        PDF_FASE_URL: 'https://drive.google.com/file/d/fake-h50-phase/view',
+        PAG_INICIAL: '10',
+        PAG_FINAL: '12',
+        TIPO: 'FASE_ALFA',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '01HE01 - Texto operacional ficticio',
+        MISSOES: '01HE01D01',
+      },
+    ]);
+    const report = buildImportReport([sheet], '2026-01-01T00:00:00.000Z', { redact: true });
+    const text = JSON.stringify(report);
+
+    expect(text).not.toContain('Texto operacional ficticio');
+    expect(text).toContain('oi:H50:PESOP|SPFO-1|01HE01|FASE_ALFA');
     expect(text).toContain('[REDACTED]');
   });
 });

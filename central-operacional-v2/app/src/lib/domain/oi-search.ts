@@ -1,5 +1,11 @@
-import type { OiRecord } from './types';
-import { normalizeUpper } from './normalization';
+import type { OiRecord } from './types.ts';
+import { normalizeUpper } from './normalization.ts';
+
+export type OiSearchResult =
+  | { status: 'empty'; items: [] }
+  | { status: 'not_found'; items: [] }
+  | { status: 'single'; items: [OiRecord] }
+  | { status: 'ambiguous'; items: OiRecord[] };
 
 export function normalizeOiCompact(value: unknown): string {
   return normalizeUpper(value).replace(/[^A-Z0-9]/g, '');
@@ -14,21 +20,41 @@ export function extractMissionCodes(value: unknown): string[] {
 }
 
 export function searchOi(records: OiRecord[], query: string, aircraft: OiRecord['aircraft']): OiRecord[] {
+  return searchOiMatches(records, query, aircraft);
+}
+
+export function searchOiDetailed(records: OiRecord[], query: string, aircraft?: OiRecord['aircraft']): OiSearchResult {
+  const matches = searchOiMatches(records, query, aircraft);
+  if (normalizeOiCompact(query).length < 3) return { status: 'empty', items: [] };
+  if (!matches.length) return { status: 'not_found', items: [] };
+  if (matches.length === 1) return { status: 'single', items: [matches[0]] };
+  return { status: 'ambiguous', items: matches };
+}
+
+function searchOiMatches(records: OiRecord[], query: string, aircraft?: OiRecord['aircraft']): OiRecord[] {
   const compact = normalizeOiCompact(query);
   if (compact.length < 3) return [];
 
   const queryMission = extractMissionCodes(query)[0] ?? '';
   const queryPhase = queryMission ? queryMission.slice(0, 6) : (extractPhaseCodes(query)[0] ?? compact.slice(0, 6));
+  const aircraftQuery = compact === 'H50' || compact === 'H125' ? compact : '';
 
   return records
-    .filter((record) => record.active && record.aircraft === aircraft)
-    .map((record) => ({ record, score: scoreRecord(record, compact, queryMission, queryPhase) }))
+    .filter((record) => record.active && (!aircraft || record.aircraft === aircraft))
+    .map((record) => ({ record, score: scoreRecord(record, compact, queryMission, queryPhase, aircraftQuery) }))
     .filter((item) => item.score < 999)
-    .sort((a, b) => a.score - b.score || a.record.oiKey.localeCompare(b.record.oiKey))
+    .sort(
+      (a, b) =>
+        a.score - b.score ||
+        a.record.aircraft.localeCompare(b.record.aircraft) ||
+        a.record.oiKey.localeCompare(b.record.oiKey) ||
+        a.record.startPage - b.record.startPage ||
+        (a.record.driveFileId ?? '').localeCompare(b.record.driveFileId ?? ''),
+    )
     .map((item) => item.record);
 }
 
-function scoreRecord(record: OiRecord, compact: string, queryMission: string, queryPhase: string): number {
+function scoreRecord(record: OiRecord, compact: string, queryMission: string, queryPhase: string, aircraftQuery: string): number {
   const phaseCodes = [
     record.phaseId,
     record.displayKey,
@@ -44,7 +70,10 @@ function scoreRecord(record: OiRecord, compact: string, queryMission: string, qu
     record.program,
     record.subprogram,
     record.missionCodes.join(' '),
+    record.aircraft,
   ].map(normalizeOiCompact);
+
+  if (aircraftQuery) return record.aircraft === aircraftQuery ? 0 : 999;
 
   if (queryMission) {
     if (missionCodes.includes(queryMission)) return 0;

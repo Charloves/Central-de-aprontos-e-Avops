@@ -1,5 +1,5 @@
 export { readRowsFromFile } from './files.ts';
-export { parseAprontos, parseAvops, parseEfetivo, parseLeituras, parsePresencas } from './legacy.ts';
+export { parseAprontos, parseAvops, parseEfetivo, parseLeituras, parseOiH125, parseOiH50, parsePresencas } from './legacy.ts';
 export { buildImportReport } from './report.ts';
 export type {
   AvopPayload,
@@ -10,6 +10,7 @@ export type {
   ImportOperation,
   ImportReport,
   LeituraPayload,
+  OiPayload,
   PresencaPayload,
   RawRow,
   SheetImportResult,

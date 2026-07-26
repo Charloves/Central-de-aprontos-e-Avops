@@ -30,6 +30,8 @@ O comando padrao usa fixtures ficticias em:
 - `fixtures/import/leituras.csv`
 - `fixtures/import/aprontos.csv`
 - `fixtures/import/presencas.csv`
+- `fixtures/import/oi_h50.csv`
+- `fixtures/import/oi_h125.csv`
 
 ## Formatos aceitos
 
@@ -169,24 +171,59 @@ Quando uma linha tiver `APRONTO_ID` e `ID`, mas nao tiver `STATUS`, justificativ
 
 Duplicidades historicas de `PRESENCAS` tambem geram operacao `stage` com classificacao `duplicate`, alem do issue `DUPLICATE_ROW`. Isso permite preservar o registro original sem duplicar a escrita futura em `briefing_records`.
 
+### OI_H50 e OI_H125
+
+Colunas obrigatorias:
+
+- `OI_KEY`
+- `PROGRAMA`
+- `SUBPROGRAMA`
+- `FASE_ID`
+- `TITULO`
+- `PDF_URL`
+- `PAG_INICIAL`
+- `PAG_FINAL`
+- `TIPO`
+- `STATUS`
+- `CHAVE_EXIBICAO`
+
+Colunas opcionais reconhecidas:
+
+- `PDF_FASE_URL`
+- `MISSOES`
+
+Regra: `PDF_FASE_URL`, quando preenchido, tem prioridade sobre `PDF_URL`, pois representa o PDF ja dividido da fase. O link original efetivo e preservado no payload preparado. Nenhum arquivo e baixado ou aberto pelo importador.
+
+Como os documentos oficiais permanecem no Google Drive, o link deve permitir extrair `drive_file_id`. Sao aceitos os formatos ja usados pelo sistema atual, como `/file/d/{id}/view`, `open?id={id}` e `uc?export=download&id={id}`. Link ausente ou link sem `drive_file_id` extraivel gera operacao `stage` com classificacao `invalid`; o importador nao inventa nem tenta corrigir URL.
+
+`FASE_ID` deve seguir o formato `01HE01`. Missoes completas seguem o formato `01HE01D01`, com os dois ultimos digitos representando a sequencia. Variacoes legitimas de `OI_KEY` sao preservadas, mas a chave e normalizada para caixa alta e separadores `|` consistentes.
+
+Linhas sem link de documento sao enviadas ao staging como `invalid`. Linhas com `PAG_FINAL` menor que `PAG_INICIAL` tambem sao enviadas ao staging como `invalid`, preservando os valores originais. Linhas com missoes que nao pertencem a `FASE_ID` sao enviadas ao staging como `ambiguous`, sem inventar fase, missao ou vinculo. Duplicidades e colisoes de chave tambem sao preservadas em staging.
+
+`STATUS = INATIVO` nao invalida a linha. O registro e importado com `active = false`, preservando o estado historico, mas consultas operacionais comuns nao retornam OI inativa.
+
+As metricas de OI sao separadas por aeronave e incluem `validosOi`, `invalidosOi`, `ambiguosOi`, `duplicadosOi` e `stagedOi`.
+
 ## Relatorio
 
 O relatorio JSON contem:
 
 - `read`: linhas lidas;
-- `valid`: linhas validas;
+- `valid`: linhas aceitas como operacoes definitivas futuras (`upsert`, `link` ou `acknowledge`), sem contar registros preservados apenas em `stage`;
 - `invalid`: linhas invalidas;
-- `duplicates`: linhas duplicadas;
+- `duplicates`: linhas duplicadas detectadas; quando a preservacao historica for necessaria, a linha duplicada tambem aparece em `operations` como `stage`;
 - `normalized`: linhas em que algum valor foi normalizado;
 - `issues`: problemas por linha;
-- `operations`: operacoes idempotentes preparadas para futura gravacao.
+- `operations`: operacoes idempotentes preparadas para futura gravacao, incluindo operacoes definitivas e registros `stage` para auditoria historica.
 - `metrics`: contagens especificas por tipo de registro quando a aba possuir metricas proprias.
 
 Para aprontos e presencas, as metricas incluem contagens como `aprontos`, `fechados`, `presencas`, `faltas`, `justificativas` e `cienciasMaterial`.
 
 Para staging de presencas, as metricas tambem incluem `stagingAmbiguos` e `stagingDuplicados`.
 
-Por padrao, o relatorio preserva os valores originais para auditoria, incluindo nome, e-mail e justificativas quando existirem. Relatorios gerados a partir de dados reais nao devem ser compartilhados sem sanitizacao. Use `--redact` para ocultar `NOME`, `EMAIL`, `name`, `OBS`, `JUSTIFICATIVA` e `justificationText` no JSON gerado.
+Para OI, as metricas indicam separadamente os registros de H-50 e H-125, alem de registros validos, invalidos, ambiguos, duplicados e enviados ao staging.
+
+Por padrao, o relatorio preserva os valores originais para auditoria, incluindo nome, e-mail, justificativas e textos de OI quando existirem. Relatorios gerados a partir de dados reais nao devem ser compartilhados sem sanitizacao. Use `--redact` para ocultar `NOME`, `EMAIL`, `name`, `OBS`, `JUSTIFICATIVA`, `justificationText`, `TITULO`, `title`, `CHAVE_EXIBICAO` e `displayKey` no JSON gerado.
 
 O `--redact` tambem sanitiza conteudos aninhados de staging, incluindo `original`, `normalized`, `original_content` e payloads preparados para compartilhamento.
 

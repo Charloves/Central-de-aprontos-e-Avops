@@ -1,10 +1,12 @@
 import {
+  extractDriveFileId,
   normalizeAudienceList,
   normalizeAvopNumber,
   normalizeText,
   normalizeTrigram,
   normalizeUpper,
 } from '../domain/normalization.ts';
+import { extractMissionCodes, extractPhaseCodes, normalizeOiCompact } from '../domain/oi-search.ts';
 import type {
   AprontoPayload,
   AvopPayload,
@@ -13,6 +15,7 @@ import type {
   ImportIssue,
   ImportOperation,
   LeituraPayload,
+  OiPayload,
   PresencaPayload,
   RawRow,
   SheetImportResult,
@@ -25,11 +28,14 @@ const REQUIRED_COLUMNS: Record<SheetKind, string[]> = {
   LEITURAS: ['AVOP_ID', 'ID'],
   APRONTOS: ['APRONTO_ID', 'TITULO', 'DATA', 'STATUS', 'EXIGE_CIENCIA_MATERIAL'],
   PRESENCAS: ['APRONTO_ID', 'ID'],
+  OI_H50: ['OI_KEY', 'PROGRAMA', 'SUBPROGRAMA', 'FASE_ID', 'TITULO', 'PDF_URL', 'PAG_INICIAL', 'PAG_FINAL', 'TIPO', 'STATUS', 'CHAVE_EXIBICAO'],
+  OI_H125: ['OI_KEY', 'PROGRAMA', 'SUBPROGRAMA', 'FASE_ID', 'TITULO', 'PDF_URL', 'PAG_INICIAL', 'PAG_FINAL', 'TIPO', 'STATUS', 'CHAVE_EXIBICAO'],
 };
 
 const CANONICAL_AUDIENCES = new Set(['PILOTO', 'TRIPULANTE', 'HSAR', 'TODOS']);
 const KNOWN_BRIEFING_STATUSES = new Set(['ABERTO', 'FECHADO', 'DRAFT']);
 const KNOWN_ATTENDANCE_STATUSES = new Set(['PRESENTE', 'JUSTIFICADO', 'AUSENTE', 'PENDENTE']);
+const KNOWN_OI_STATUSES = new Set(['ATIVO', 'INATIVO']);
 
 type Parser<TPayload extends Record<string, unknown>> = {
   sheet: SheetKind;
@@ -109,6 +115,103 @@ export function parsePresencas(rows: RawRow[]): SheetImportResult<PresencaPayloa
   };
 }
 
+export function parseOiH50(rows: RawRow[]): SheetImportResult<OiPayload> {
+  return parseOiRows(rows, 'OI_H50', 'H50');
+}
+
+export function parseOiH125(rows: RawRow[]): SheetImportResult<OiPayload> {
+  return parseOiRows(rows, 'OI_H125', 'H125');
+}
+
+function parseOiRows(rows: RawRow[], sheet: 'OI_H50' | 'OI_H125', aircraft: OiPayload['aircraft']): SheetImportResult<OiPayload> {
+  const issues: ImportIssue[] = [];
+  const operations: Array<ImportOperation<OiPayload | HistoricalStagingPayload>> = [];
+  const seenOiKeys = new Set<string>();
+  const oiKeyByCompactKey = new Map<string, string>();
+  let invalid = 0;
+  let duplicates = 0;
+  let normalized = 0;
+
+  const columnIssues = validateColumns(sheet, rows);
+  if (columnIssues.length) {
+    return {
+      sheet,
+      read: rows.length,
+      valid: 0,
+      invalid: rows.length,
+      duplicates: 0,
+      normalized: 0,
+      issues: columnIssues,
+      operations: [],
+      metrics: oiMetrics(aircraft, []),
+    };
+  }
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    if (isEmptyRow(row)) return;
+
+    const parsed = parseOiRow(row, rowNumber, sheet, aircraft);
+    issues.push(...parsed.issues);
+
+    if (parsed.operation.operation === 'stage') {
+      const payload = parsed.operation.payload;
+      if (isStagingPayload(payload) && payload.classification === 'invalid') invalid += 1;
+      if (isStagingPayload(payload) && payload.classification === 'ambiguous') normalized += parsed.normalized ? 1 : 0;
+      operations.push(parsed.operation);
+      return;
+    }
+
+    const payload = parsed.operation.payload;
+    if (!isOiPayload(payload)) return;
+    const compactKey = normalizeOiCompact(payload.oiKey);
+    const previousOiKey = oiKeyByCompactKey.get(compactKey);
+    const duplicateKey = `${payload.aircraft}|${payload.oiKey}`;
+
+    if (seenOiKeys.has(duplicateKey)) {
+      duplicates += 1;
+      const issue = errorIssue(sheet, rowNumber, 'DUPLICATE_OI_KEY', `OI duplicada para chave ${duplicateKey}.`, row);
+      issues.push(issue);
+      operations.push(createStagingOperation(sheet, rowNumber, row, payload, [issue], 'duplicate', duplicateKey));
+      return;
+    }
+
+    if (previousOiKey && previousOiKey !== payload.oiKey) {
+      duplicates += 1;
+      const issue = errorIssue(sheet, rowNumber, 'OI_KEY_COLLISION', `Chaves diferentes colidem quando compactadas: ${previousOiKey} e ${payload.oiKey}.`, row);
+      issues.push(issue);
+      operations.push(createStagingOperation(sheet, rowNumber, row, payload, [issue], 'duplicate', `${aircraft}|${compactKey}`));
+      return;
+    }
+
+    seenOiKeys.add(duplicateKey);
+    oiKeyByCompactKey.set(compactKey, payload.oiKey);
+    if (parsed.normalized) normalized += 1;
+    operations.push(parsed.operation);
+  });
+
+  const validOiPayloads = operations
+    .filter((operation) => operation.operation !== 'stage')
+    .map((operation) => operation.payload)
+    .filter(isOiPayload);
+  const stagedPayloads = operations
+    .filter((operation) => operation.operation === 'stage')
+    .map((operation) => operation.payload)
+    .filter(isStagingPayload);
+
+  return {
+    sheet,
+    read: rows.length,
+    valid: validOiPayloads.length,
+    invalid,
+    duplicates,
+    normalized,
+    issues,
+    operations,
+    metrics: oiMetrics(aircraft, validOiPayloads, stagedPayloads),
+  };
+}
+
 function parseSheet<TPayload extends Record<string, unknown>>(
   rows: RawRow[],
   parser: Parser<TPayload>,
@@ -169,10 +272,12 @@ function parseSheet<TPayload extends Record<string, unknown>>(
     operations.push(parsed.operation);
   });
 
+  const definitiveOperations = operations.filter((operation) => operation.operation !== 'stage');
+
   return {
     sheet: parser.sheet,
     read: rows.length,
-    valid: operations.length,
+    valid: definitiveOperations.length,
     invalid,
     duplicates,
     normalized,
@@ -489,6 +594,135 @@ function parsePresencaRow(row: RawRow, rowNumber: number): ParsedRow<PresencaPay
   };
 }
 
+function parseOiRow(
+  row: RawRow,
+  rowNumber: number,
+  sheet: 'OI_H50' | 'OI_H125',
+  aircraft: OiPayload['aircraft'],
+): { operation: ImportOperation<OiPayload | HistoricalStagingPayload>; normalized: boolean; issues: ImportIssue[] } {
+  const originalOiKey = normalizeText(row.OI_KEY);
+  const oiKey = normalizeOiKey(originalOiKey);
+  const program = normalizeUpper(row.PROGRAMA);
+  const subprogram = normalizeUpper(row.SUBPROGRAMA);
+  const phaseId = normalizeOiCompact(row.FASE_ID);
+  const title = normalizeText(row.TITULO);
+  const pdfUrl = normalizeText(row.PDF_FASE_URL) || normalizeText(row.PDF_URL);
+  const driveFileId = extractDriveFileId(pdfUrl);
+  const startPage = parsePositiveInteger(row.PAG_INICIAL);
+  const endPage = parseOptionalPositiveInteger(row.PAG_FINAL);
+  const type = normalizeUpper(row.TIPO);
+  const status = normalizeUpper(row.STATUS);
+  const active = status === 'ATIVO';
+  const displayKey = normalizeText(row.CHAVE_EXIBICAO);
+  const missionCodes = normalizeMissionCodes(row.MISSOES, phaseId);
+  const warnings: ImportIssue[] = [];
+  const errors = requiredValueIssues(sheet, rowNumber, row, [
+    ['OI_KEY', oiKey],
+    ['PROGRAMA', program],
+    ['SUBPROGRAMA', subprogram],
+    ['FASE_ID', phaseId],
+    ['TITULO', title],
+    ['PDF_URL/PDF_FASE_URL', pdfUrl],
+    ['PAG_INICIAL', startPage ? String(startPage) : ''],
+    ['TIPO', type],
+    ['STATUS', status],
+    ['CHAVE_EXIBICAO', displayKey],
+  ]);
+
+  if (!phaseId || !/^\d{2}[A-Z]{2}\d{2}$/.test(phaseId)) {
+    errors.push(errorIssue(sheet, rowNumber, 'INVALID_PHASE_ID', 'FASE_ID deve seguir o formato 01HE01.', row));
+  }
+
+  if (!driveFileId && pdfUrl) {
+    errors.push(errorIssue(sheet, rowNumber, 'INVALID_DRIVE_URL', 'Link informado sem identificador reconhecido do Google Drive.', row));
+  }
+
+  warnings.push(...unknownStatusIssues(sheet, rowNumber, row, status, KNOWN_OI_STATUSES, 'UNKNOWN_OI_STATUS'));
+
+  if (endPage !== null && startPage !== null && endPage < startPage) {
+    errors.push(errorIssue(sheet, rowNumber, 'INVALID_PAGE_RANGE', 'PAG_FINAL nao pode ser menor que PAG_INICIAL.', row));
+  }
+
+  if (errors.length) {
+    return {
+      normalized: false,
+      issues: errors,
+      operation: createStagingOperation(sheet, rowNumber, row, null, errors, 'invalid', `${aircraft}|${oiKey || rowNumber}`),
+    };
+  }
+
+  const missionOutsidePhase = missionCodes.filter((mission) => !mission.startsWith(phaseId));
+  if (missionOutsidePhase.length) {
+    const issue = warningIssue(
+      sheet,
+      rowNumber,
+      'MISSION_PHASE_MISMATCH',
+      `Missoes nao pertencem a FASE_ID ${phaseId}: ${missionOutsidePhase.join(', ')}.`,
+      row,
+    );
+    const normalized = buildOiNormalizedPayload({
+      aircraft,
+      oiKey,
+      program,
+      subprogram,
+      phaseId,
+      title,
+      driveUrl: pdfUrl,
+      driveFileId,
+      startPage: startPage ?? 1,
+      endPage,
+      displayKey,
+      type,
+      status,
+      active,
+      missionCodes,
+      source: sheet,
+      originalOiKey,
+    });
+    return {
+      normalized: originalOiKey !== oiKey || normalizeText(row.PDF_FASE_URL) === pdfUrl || missionCodes.join(' ') !== normalizeText(row.MISSOES),
+      issues: [issue],
+      operation: createStagingOperation(sheet, rowNumber, row, normalized, [issue], 'ambiguous', `${aircraft}|${oiKey}`),
+    };
+  }
+
+  const payload: OiPayload = {
+    aircraft,
+    oiKey,
+    program,
+    subprogram,
+    phaseId,
+    title,
+    driveUrl: pdfUrl,
+    driveFileId,
+    startPage: startPage ?? 1,
+    endPage,
+    displayKey,
+    type,
+    status,
+    active,
+    missionCodes,
+    source: sheet,
+    originalOiKey,
+  };
+
+  return {
+    normalized:
+      originalOiKey !== oiKey ||
+      normalizeText(row.PDF_FASE_URL) === pdfUrl ||
+      phaseId !== normalizeText(row.FASE_ID) ||
+      missionCodes.join(' ') !== normalizeText(row.MISSOES),
+    issues: warnings,
+    operation: {
+      sheet,
+      operation: 'upsert',
+      idempotencyKey: `oi:${aircraft}:${oiKey}`,
+      payload,
+      original: row,
+    },
+  };
+}
+
 function validateColumns(sheet: SheetKind, rows: RawRow[]): ImportIssue[] {
   const sample = rows[0] ?? {};
   const headers = new Set(Object.keys(sample));
@@ -517,6 +751,57 @@ function parseYesNo(value: unknown): boolean | null {
   if (normalized === 'SIM') return true;
   if (normalized === 'NAO' || normalized === 'NÃO') return false;
   return null;
+}
+
+function parsePositiveInteger(value: unknown): number | null {
+  const text = normalizeText(value);
+  if (!/^\d+$/.test(text)) return null;
+  const number = Number(text);
+  return Number.isSafeInteger(number) && number > 0 ? number : null;
+}
+
+function parseOptionalPositiveInteger(value: unknown): number | null {
+  const text = normalizeText(value);
+  if (!text) return null;
+  return parsePositiveInteger(text);
+}
+
+function normalizeOiKey(value: unknown): string {
+  return normalizeUpper(value)
+    .split('|')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('|');
+}
+
+function normalizeMissionCodes(value: unknown, phaseId: string): string[] {
+  const explicit = extractMissionCodes(value);
+  if (explicit.length) return explicit;
+
+  const phaseCodes = extractPhaseCodes(value).filter((code) => code === phaseId);
+  return phaseCodes.length ? [] : [];
+}
+
+function buildOiNormalizedPayload(payload: OiPayload): RawRow {
+  return {
+    aircraft: payload.aircraft,
+    oiKey: payload.oiKey,
+    program: payload.program,
+    subprogram: payload.subprogram,
+    phaseId: payload.phaseId,
+    title: payload.title,
+    driveUrl: payload.driveUrl,
+    driveFileId: payload.driveFileId,
+    startPage: payload.startPage,
+    endPage: payload.endPage,
+    displayKey: payload.displayKey,
+    type: payload.type,
+    status: payload.status,
+    active: payload.active,
+    missionCodes: payload.missionCodes,
+    source: payload.source,
+    originalOiKey: payload.originalOiKey,
+  };
 }
 
 function parseAttendanceStatus(value: unknown): PresencaPayload['attendanceStatus'] {
@@ -652,9 +937,13 @@ function createStagingOperation(
     normalized,
     issues: issues.map(({ severity, code, message }) => ({ severity, code, message })),
     limitationReason:
-      classification === 'ambiguous'
+      classification === 'ambiguous' && sheet === 'PRESENCAS'
         ? 'registro historico ambiguo sem status, justificativa ou ciencia de material'
-        : 'registro historico duplicado preservado para auditoria',
+        : classification === 'ambiguous'
+        ? 'registro historico ambiguo preservado sem inventar classificacao'
+        : classification === 'invalid'
+          ? 'registro historico invalido preservado para auditoria'
+          : 'registro historico duplicado preservado para auditoria',
     migrated: true,
     resolvedEntityType: null,
     resolvedEntityId: null,
@@ -673,7 +962,8 @@ function isPresencaPayload(payload: PresencaPayload | HistoricalStagingPayload):
   return 'source' in payload && payload.source === 'PRESENCAS';
 }
 
-function isStagingPayload(payload: PresencaPayload | HistoricalStagingPayload): payload is HistoricalStagingPayload {
+function isStagingPayload(payload: unknown): payload is HistoricalStagingPayload {
+  if (typeof payload !== 'object' || payload === null) return false;
   return 'classification' in payload && 'sourceRecordType' in payload;
 }
 
@@ -681,6 +971,25 @@ function isAprontoPayload(payload: AprontoPayload | HistoricalStagingPayload): p
   return 'source' in payload && payload.source === 'APRONTOS';
 }
 
+function isOiPayload(payload: OiPayload | HistoricalStagingPayload): payload is OiPayload {
+  return 'source' in payload && (payload.source === 'OI_H50' || payload.source === 'OI_H125');
+}
+
 function isNormalizedValue(normalized: RawRow | null, key: string): boolean {
   return Boolean(normalized?.[key]);
+}
+
+function oiMetrics(
+  aircraft: OiPayload['aircraft'],
+  rows: OiPayload[],
+  stagedRows: HistoricalStagingPayload[] = [],
+): Record<string, number> {
+  return {
+    [`oi${aircraft}`]: rows.length,
+    validosOi: rows.length,
+    invalidosOi: stagedRows.filter((row) => row.classification === 'invalid').length,
+    ambiguosOi: stagedRows.filter((row) => row.classification === 'ambiguous').length,
+    duplicadosOi: stagedRows.filter((row) => row.classification === 'duplicate').length,
+    stagedOi: stagedRows.length,
+  };
 }

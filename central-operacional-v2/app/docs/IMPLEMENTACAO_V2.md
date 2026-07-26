@@ -50,9 +50,27 @@ Quando a origem for migração e não houver evidência confiável do perfil vig
 
 ## Importacao em dry-run
 
-`npm run import:dry-run` executa os importadores locais iniciais para `EFETIVO`, `AVOPS`, `LEITURAS`, `APRONTOS` e `PRESENCAS` usando fixtures ficticias. A rotina nao acessa a planilha oficial, nao usa Apps Script e nao grava no Supabase.
+`npm run import:dry-run` executa os importadores locais iniciais para `EFETIVO`, `AVOPS`, `LEITURAS`, `APRONTOS`, `PRESENCAS`, `OI_H50` e `OI_H125` usando fixtures ficticias. A rotina nao acessa a planilha oficial, nao usa Apps Script, nao acessa Google Drive e nao grava no Supabase.
 
-Use `npm run import:dry-run -- --redact` quando o relatorio precisar ser compartilhado sem expor nome, e-mail ou justificativas. O formato esperado dos arquivos esta documentado em `docs/IMPORTACAO_DRY_RUN.md`.
+Use `npm run import:dry-run -- --redact` quando o relatorio precisar ser compartilhado sem expor nome, e-mail, justificativas ou textos operacionais de OI. O formato esperado dos arquivos esta documentado em `docs/IMPORTACAO_DRY_RUN.md`.
+
+## Consulta OI pura
+
+As regras puras de consulta de OI funcionam sobre metadados ja importados em memoria, sem interface e sem banco real.
+
+Regras implementadas:
+
+- filtrar por aeronave quando o filtro for informado;
+- buscar por codigo completo de missao, como `01HE01D07`;
+- aplicar fallback para codigo-base/fase, como `01HE01`, somente quando a linha possui fase compativel;
+- quando a linha tem lista explicita de missoes, um codigo completo fora dessa lista nao e aceito por fallback amplo;
+- pesquisar por fase, titulo, programa, subprograma e prefixo parcial;
+- retornar `single`, `ambiguous`, `not_found` ou `empty`;
+- nunca escolher silenciosamente quando houver mais de uma correspondencia;
+- ordenar resultados de forma deterministica por `score`, `aircraft`, `oiKey`, `startPage` e `driveFileId`;
+- ignorar OIs inativas nas consultas operacionais comuns;
+- preservar o link original do Google Drive no registro retornado;
+- abertura do documento nao equivale a ciencia.
 
 ## Staging historico
 

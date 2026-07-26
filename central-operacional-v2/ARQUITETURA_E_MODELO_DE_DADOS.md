@@ -215,6 +215,8 @@ Tabela nominal do denominador do apronto no momento da abertura/publicação. El
 - `display_key`
 - `active`
 
+As abas legadas `OI_H50` e `OI_H125` mapeiam diretamente para esta tabela. O importador deve preservar `OI_KEY`, `CHAVE_EXIBICAO`, `PDF_URL`, `PDF_FASE_URL` e a lista de `MISSOES` sem acessar Google Drive. Registros sem link, com missoes incompativeis com a fase ou com colisao de chave devem ser preservados no staging historico, nao gravados silenciosamente em `ois`.
+
 ### `notification_schedule`
 
 - `id`

@@ -67,7 +67,11 @@ function isSensitiveReportField(key: string): boolean {
     normalized === 'NAME' ||
     normalized === 'OBS' ||
     normalized === 'JUSTIFICATIVA' ||
-    normalized === 'JUSTIFICATIONTEXT'
+    normalized === 'JUSTIFICATIONTEXT' ||
+    normalized === 'TITULO' ||
+    normalized === 'TITLE' ||
+    normalized === 'CHAVE_EXIBICAO' ||
+    normalized === 'DISPLAYKEY'
   );
 }
 

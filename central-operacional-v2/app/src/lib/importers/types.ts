@@ -1,4 +1,4 @@
-export type SheetKind = 'EFETIVO' | 'AVOPS' | 'LEITURAS' | 'APRONTOS' | 'PRESENCAS';
+export type SheetKind = 'EFETIVO' | 'AVOPS' | 'LEITURAS' | 'APRONTOS' | 'PRESENCAS' | 'OI_H50' | 'OI_H125';
 
 export type SourceFormat = 'csv' | 'json';
 
@@ -104,6 +104,26 @@ export type PresencaPayload = {
   source: 'PRESENCAS';
   originalBriefingId: string;
   originalId: string;
+};
+
+export type OiPayload = {
+  aircraft: 'H50' | 'H125';
+  oiKey: string;
+  program: string;
+  subprogram: string;
+  phaseId: string;
+  title: string;
+  driveUrl: string;
+  driveFileId: string | null;
+  startPage: number;
+  endPage: number | null;
+  displayKey: string;
+  type: string;
+  status: string;
+  missionCodes: string[];
+  active: boolean;
+  source: 'OI_H50' | 'OI_H125';
+  originalOiKey: string;
 };
 
 export type HistoricalStagingPayload = {

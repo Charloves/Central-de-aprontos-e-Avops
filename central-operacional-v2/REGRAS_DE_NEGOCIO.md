@@ -67,6 +67,11 @@ Uma atividade é exibida quando:
 - Aceitar código completo.
 - Aplicar fallback para código-base somente conforme comportamento atual validado.
 - Exibir páginas e documento corretos.
+- Não escolher silenciosamente uma OI quando houver mais de uma correspondência; retornar as opções encontradas.
+- Preservar o link original do Google Drive nos metadados.
+- Não considerar abertura do documento como ciência.
+- Não retornar OI inativa nas consultas operacionais comuns.
+- Exigir link válido do Google Drive nos metadados importados.
 
 ## 8. Dashboard
 

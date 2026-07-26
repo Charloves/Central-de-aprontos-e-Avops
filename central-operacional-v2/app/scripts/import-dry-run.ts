@@ -4,6 +4,8 @@ import {
   parseAvops,
   parseEfetivo,
   parseLeituras,
+  parseOiH125,
+  parseOiH50,
   parsePresencas,
   readRowsFromFile,
 } from '../src/lib/importers/index.ts';
@@ -14,6 +16,8 @@ type ImportArgs = {
   leituras?: string;
   aprontos?: string;
   presencas?: string;
+  oiH50?: string;
+  oiH125?: string;
   redact?: boolean;
 };
 
@@ -45,8 +49,18 @@ if (args.presencas) {
   sheets.push(parsePresencas(rows));
 }
 
+if (args.oiH50) {
+  const { rows } = readRowsFromFile(args.oiH50);
+  sheets.push(parseOiH50(rows));
+}
+
+if (args.oiH125) {
+  const { rows } = readRowsFromFile(args.oiH125);
+  sheets.push(parseOiH125(rows));
+}
+
 if (!sheets.length) {
-  throw new Error('Informe pelo menos um arquivo: --efetivo, --avops, --leituras, --aprontos ou --presencas.');
+  throw new Error('Informe pelo menos um arquivo: --efetivo, --avops, --leituras, --aprontos, --presencas, --oi-h50 ou --oi-h125.');
 }
 
 const report = buildImportReport(sheets, new Date().toISOString(), { redact: args.redact });
@@ -73,6 +87,8 @@ function parseArgs(values: string[]): ImportArgs {
     else if (key === '--leituras') out.leituras = value;
     else if (key === '--aprontos') out.aprontos = value;
     else if (key === '--presencas') out.presencas = value;
+    else if (key === '--oi-h50') out.oiH50 = value;
+    else if (key === '--oi-h125') out.oiH125 = value;
     else throw new Error(`Argumento desconhecido: ${key}`);
 
     i += 1;
