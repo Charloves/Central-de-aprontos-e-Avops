@@ -1,0 +1,6 @@
+AVOP_ID,TITULO,DATA_EMISSAO,PRAZO_DIAS,WEBAPP_URL,STATUS,PERFIL_ALVO,EXIGE_CIENCIA
+AVOP-2026-01,Procedimento ficticio,22/04/2026,30,https://example.test/avop-01,ATIVO,PILOTO,SIM
+AVOP 02-2026,Comunicado ficticio,2026-04-23,,https://example.test/avop-02,ATIVO,"PILOTO E HSAR",SIM
+AVOP-2026-01,Duplicado ficticio,22/04/2026,30,https://example.test/avop-01,ATIVO,PILOTO,SIM
+AVOP 03-2026,Sem ciencia ficticio,2026-04-24,15,https://example.test/avop-03,ATIVO,TODOS,NAO
+,Sem identificador,2026-04-25,15,https://example.test/avop-04,ATIVO,TODOS,SIM

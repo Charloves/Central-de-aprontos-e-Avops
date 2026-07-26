@@ -47,3 +47,9 @@ Nenhum segredo deve ser commitado. Use somente arquivos `.env.*.local` para cred
 Essa migration deve ser aplicada após `0001_initial_schema.sql`. Ela não importa dados, não recalcula histórico antigo e não altera registros legados. O objetivo é preservar, a partir da V2, o denominador nominal de cada AVOP e apronto no momento da publicação ou abertura.
 
 Quando a origem for migração e não houver evidência confiável do perfil vigente na época, os registros devem manter a limitação em `limitation_reason`, usando `perfil historico nao disponivel`.
+
+## Importacao em dry-run
+
+`npm run import:dry-run` executa os importadores locais iniciais para `EFETIVO`, `AVOPS` e `LEITURAS` usando fixtures ficticias. A rotina nao acessa a planilha oficial, nao usa Apps Script e nao grava no Supabase.
+
+Use `npm run import:dry-run -- --redact` quando o relatorio precisar ser compartilhado sem expor nome e e-mail. O formato esperado dos arquivos esta documentado em `docs/IMPORTACAO_DRY_RUN.md`.
