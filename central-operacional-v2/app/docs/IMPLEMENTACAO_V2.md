@@ -91,3 +91,42 @@ Os importadores locais tambem aceitam `EMAIL_LOG` e `ACESSOS_LOG` em CSV ou JSON
 `ACESSOS_LOG` e preparado para futura escrita em `audit_log`, mantendo trigrama normalizado apenas como evidencia legada ate que o perfil seja resolvido no banco. Login valido, login negado e acesso administrativo sao classificados somente quando houver evidencia nos campos `MODULO`, `ACAO`, `STATUS` e `DETALHE`.
 
 As idempotency keys dos novos logs usam SHA-256 dos campos normalizados para reduzir exposicao direta de e-mail, trigrama, IP e user-agent. Operacoes de staging tambem usam SHA-256 de conteudo canonico, sem incluir `rowNumber` na identidade. O `rowNumber` fica apenas como metadado de auditoria para localizar a linha original. Quando houver ocorrencias exatamente identicas do mesmo fingerprint, o importador adiciona ordinal deterministico por ocorrencia, preservando todas as linhas sem depender da ordem fisica do arquivo. O modo `--redact` sanitiza payload, original, staging, issues e oculta `idempotencyKey` em relatorios compartilhaveis.
+
+## Autenticacao por trigrama
+
+A V2 usa login exclusivamente por trigrama. O navegador envia apenas o valor digitado para `POST /api/auth/login`; a validacao do perfil ocorre somente no servidor por meio da interface `ProfileRepository`.
+
+Fluxo implementado:
+
+- `SupabaseProfileRepository` consulta `profiles` e `profile_roles` apenas no servidor.
+- `FakeProfileRepository` permite testes unitarios sem banco real.
+- `authenticateTrigram` normaliza e limita o formato do trigrama, consulta o repositorio, exige perfil ativo e retorna mensagem generica para trigrama inexistente, inativo ou malformado.
+- login valido emite cookie assinado `HttpOnly` com `SameSite=Lax`; `Secure` e usado em producao.
+- o cookie de sessao contem apenas `trigram`, `exp` e `nonce`; papeis administrativos nao sao fonte de autorizacao no token.
+- toda requisicao administrativa recarrega o perfil ativo e os papeis atuais no servidor antes de autorizar `COORDINATOR` ou `ADMIN`.
+- se o perfil estiver inativo, inexistente ou perder o papel administrativo, o acesso administrativo deve ser negado imediatamente.
+- `SESSION_SECRET` e obrigatorio, deve ter pelo menos 32 caracteres e nao pode ser uma repeticao simples.
+- `SESSION_DURATION_SECONDS` controla a duracao da sessao.
+- `APP_ORIGIN` define a origem confiavel para endpoints mutaveis; o valor deve vir somente de variavel server-side.
+- `POST /api/auth/login` e `POST /api/auth/logout` validam `Origin` e `Sec-Fetch-Site`; em producao, origem ausente ou incompativel e rejeitada com erro generico.
+- em desenvolvimento, a ausencia de `APP_ORIGIN` ou `Origin` pode ser aceita para facilitar testes locais, mas producao deve configurar `APP_ORIGIN`.
+- `POST /api/auth/logout` remove o cookie da sessao.
+- `/portal` exige sessao valida.
+- `/admin` e `/admin/roles` exigem `COORDINATOR` ou `ADMIN`.
+- modulos que usam `SUPABASE_SERVICE_ROLE_KEY` sao marcados com `server-only` para impedir importacao por Client Components.
+
+A lista de trigramas nunca e enviada ao navegador, e nenhum valor e salvo em `localStorage` ou `sessionStorage`.
+
+Contratos de auditoria:
+
+- o servico de login retorna um objeto `LoginAuditContract` com status, motivo interno, hash SHA-256 do trigrama e timestamp;
+- a etapa atual nao grava esse contrato no banco real;
+- o schema existente `audit_log` comporta registro futuro de login, acesso negado e acesso administrativo sem nova migration.
+
+Nao foi criada migration nesta etapa. Persistencia de tentativas repetidas, bloqueio temporario por abuso ou sessoes revogaveis exigira estrutura adicional e deve ser diagnosticada antes de alterar o banco.
+
+Riscos pendentes antes de producao:
+
+- ainda nao existe rate limit persistente ou bloqueio temporario de tentativas repetidas;
+- diferencas temporais entre consulta de perfil inexistente e perfil existente/inativo ainda devem ser mitigadas com controle de tentativa e telemetria;
+- revogacao server-side de sessoes individuais ainda nao existe; a etapa atual revalida perfil e papeis em cada requisicao protegida.

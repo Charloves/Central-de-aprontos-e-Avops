@@ -1,44 +1,59 @@
-import { normalizeTrigram } from '@/lib/domain/normalization';
+import Link from 'next/link';
+import { hasAdminAccess } from '@/lib/auth/session';
+import { requireSession } from '@/lib/auth/server';
+
+export const dynamic = 'force-dynamic';
 
 type PortalPageProps = {
-  searchParams?: Promise<{ trigram?: string | string[] }>;
+  searchParams?: Promise<{ error?: string | string[] }>;
 };
 
 export default async function PortalPage({ searchParams }: PortalPageProps) {
-  const resolvedSearchParams = searchParams ? await searchParams : {};
-  const rawTrigram = Array.isArray(resolvedSearchParams.trigram)
-    ? resolvedSearchParams.trigram[0]
-    : resolvedSearchParams.trigram;
-  const trigram = normalizeTrigram(rawTrigram);
-  const isInitialAdmin = trigram === 'CHA';
+  const session = await requireSession();
+  const params = searchParams ? await searchParams : {};
+  const error = Array.isArray(params.error) ? params.error[0] : params.error;
 
   return (
     <main className="shell">
       <section className="panel">
-        <p className="muted">Sessão V2 de homologação</p>
-        <h1>{trigram ? `Usuário ${trigram}` : 'Trigrama não informado'}</h1>
+        <div className="topbar">
+          <div>
+            <p className="muted">Sessao V2 de homologacao</p>
+            <h1>Usuario {session.trigram}</h1>
+          </div>
+          <form action="/api/auth/logout" method="post">
+            <button className="button secondary" type="submit">Sair</button>
+          </form>
+        </div>
+
+        {error === 'forbidden' ? (
+          <p className="alert" role="alert">
+            A area administrativa exige perfil de coordenador ou administrador.
+          </p>
+        ) : null}
+
         <p>
-          Esta tela ainda usa dados demonstrativos. A próxima etapa é conectar a autenticação ao banco de homologação
-          importado da planilha.
+          Esta tela ja usa sessao assinada em cookie HttpOnly. Os modulos reais serao conectados nas proximas etapas.
         </p>
 
         <div className="grid">
           <article className="card">
             <h2>AVOP</h2>
-            <p>Listagem aplicável ao perfil e registro de ciência idempotente.</p>
+            <p>Listagem aplicavel ao perfil e registro de ciencia idempotente.</p>
           </article>
           <article className="card">
             <h2>Aprontos</h2>
-            <p>Registro de presença, justificativa e ciência de material.</p>
+            <p>Registro de presenca, justificativa e ciencia de material.</p>
           </article>
           <article className="card">
             <h2>OI</h2>
-            <p>Pesquisa por H50/H125, missão completa e fase.</p>
+            <p>Pesquisa por H50/H125, missao completa e fase.</p>
           </article>
-          {isInitialAdmin ? (
+          {hasAdminAccess(session) ? (
             <article className="card">
-              <h2>Administração</h2>
-              <p>CHA está configurado como coordenador/admin inicial para a V2.</p>
+              <h2>Administracao</h2>
+              <p>Area restrita a COORDINATOR e ADMIN.</p>
+              <Link href="/admin/roles">Abrir administracao</Link>
             </article>
           ) : null}
         </div>

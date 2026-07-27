@@ -67,6 +67,11 @@ a {
   padding: 0 18px;
 }
 
+.button.secondary {
+  background: #d9e6f7;
+  color: var(--ink);
+}
+
 .input {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -74,4 +79,19 @@ a {
   min-height: 44px;
   padding: 0 14px;
   width: 100%;
+}
+
+.alert {
+  background: #fff3d6;
+  border: 1px solid #ffd37a;
+  border-radius: 14px;
+  margin-top: 18px;
+  padding: 12px 14px;
+}
+
+.topbar {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
 }
