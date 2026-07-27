@@ -1,4 +1,13 @@
-export type SheetKind = 'EFETIVO' | 'AVOPS' | 'LEITURAS' | 'APRONTOS' | 'PRESENCAS' | 'OI_H50' | 'OI_H125';
+export type SheetKind =
+  | 'EFETIVO'
+  | 'AVOPS'
+  | 'LEITURAS'
+  | 'APRONTOS'
+  | 'PRESENCAS'
+  | 'OI_H50'
+  | 'OI_H125'
+  | 'EMAIL_LOG'
+  | 'ACESSOS_LOG';
 
 export type SourceFormat = 'csv' | 'json';
 
@@ -124,6 +133,36 @@ export type OiPayload = {
   active: boolean;
   source: 'OI_H50' | 'OI_H125';
   originalOiKey: string;
+};
+
+export type EmailLogPayload = {
+  attemptedAt: string;
+  avopNumber: string | null;
+  trigram: string | null;
+  recipient: string;
+  notificationType: 'COBRANCA' | 'DIVULGACAO' | 'TESTE_COBRANCA' | 'JOB_COBRANCA' | 'OUTRO';
+  originalType: string;
+  result: 'ENVIADO' | 'ERRO' | 'INICIADO' | 'CONCLUIDO' | 'OUTRO';
+  originalResult: string;
+  errorMessage: string | null;
+  observation: string | null;
+  source: 'EMAIL_LOG';
+  originalAvopId: string;
+  originalId: string;
+};
+
+export type AccessLogPayload = {
+  occurredAt: string;
+  trigram: string | null;
+  module: string;
+  action: string;
+  detail: string | null;
+  status: 'OK' | 'NEGADO' | 'ERRO' | 'OUTRO';
+  accessType: 'LOGIN_VALIDO' | 'LOGIN_INVALIDO' | 'ACESSO_ADMINISTRATIVO' | 'ACESSO' | 'OUTRO';
+  entityType: string;
+  entityId: string;
+  source: 'ACESSOS_LOG';
+  originalId: string;
 };
 
 export type HistoricalStagingPayload = {

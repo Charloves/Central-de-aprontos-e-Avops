@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { parseCsv } from './csv';
-import { parseAprontos, parseAvops, parseEfetivo, parseLeituras, parseOiH125, parseOiH50, parsePresencas } from './legacy';
+import {
+  parseAcessosLog,
+  parseAprontos,
+  parseAvops,
+  parseEfetivo,
+  parseEmailLog,
+  parseLeituras,
+  parseOiH125,
+  parseOiH50,
+  parsePresencas,
+} from './legacy';
 import { buildImportReport } from './report';
 
 describe('legacy importers', () => {
@@ -125,14 +135,14 @@ describe('legacy importers', () => {
     expect(report.totals).toMatchObject({ read: 2, valid: 2, invalid: 0, operations: 2 });
   });
 
-  it('redact oculta nome e email sem remover chaves operacionais', () => {
+  it('redact oculta nome, email e chaves operacionais identificaveis', () => {
     const sheet = parseEfetivo([{ ID: 'abc', NOME: 'Militar Alfa', EMAIL: 'alfa@example.test', ATIVO: 'SIM', PERFIS: 'PILOTO' }]);
     const report = buildImportReport([sheet], '2026-01-01T00:00:00.000Z', { redact: true });
     const text = JSON.stringify(report);
 
     expect(text).not.toContain('Militar Alfa');
     expect(text).not.toContain('alfa@example.test');
-    expect(text).toContain('profile:ABC');
+    expect(text).not.toContain('profile:ABC');
     expect(text).toContain('[REDACTED]');
   });
 
@@ -214,9 +224,9 @@ describe('legacy importers', () => {
     expect(result.operations[0].idempotencyKey).toBe('briefing-record:APR-2026-001:ABC');
     expect(result.operations[1]).toMatchObject({
       operation: 'stage',
-      idempotencyKey: 'staging:PRESENCAS:duplicate:3:APR-2026-001|ABC',
       payload: { classification: 'duplicate' },
     });
+    expect(result.operations[1].idempotencyKey).toMatch(/^staging:[a-f0-9]{64}$/);
   });
 
   it.each([
@@ -235,7 +245,6 @@ describe('legacy importers', () => {
     expect(result).toMatchObject({ valid: 0, invalid: 0, metrics: { stagingAmbiguos: 1 } });
     expect(result.operations[0]).toMatchObject({
       operation: 'stage',
-      idempotencyKey: 'staging:PRESENCAS:ambiguous:2:APR-2026-001|ABC',
       payload: {
         sourceSheet: 'PRESENCAS',
         classification: 'ambiguous',
@@ -244,6 +253,7 @@ describe('legacy importers', () => {
         resolvedEntityId: null,
       },
     });
+    expect(result.operations[0].idempotencyKey).toMatch(/^staging:[a-f0-9]{64}$/);
     expect(JSON.stringify(result.operations[0].payload)).not.toContain('"attendanceStatus":"PRESENTE"');
     expect(JSON.stringify(result.operations[0].payload)).not.toContain('"attendanceStatus":"AUSENTE"');
     expect(result.issues).toMatchObject([{ severity: 'warning', code: 'AMBIGUOUS_EMPTY_RECORD' }]);
@@ -278,7 +288,7 @@ describe('legacy importers', () => {
     });
   });
 
-  it('redact oculta justificativa sem remover chave idempotente', () => {
+  it('redact oculta justificativa e chave idempotente identificavel', () => {
     const sheet = parsePresencas([
       {
         DATA: '16/03/2026',
@@ -293,7 +303,7 @@ describe('legacy importers', () => {
     const text = JSON.stringify(report);
 
     expect(text).not.toContain('Texto pessoal ficticio');
-    expect(text).toContain('briefing-record:APR-2026-001:ABC');
+    expect(text).not.toContain('briefing-record:APR-2026-001:ABC');
     expect(text).toContain('[REDACTED]');
   });
 
@@ -412,9 +422,9 @@ describe('legacy importers', () => {
     expect(result).toMatchObject({ valid: 0, invalid: 1 });
     expect(result.operations[0]).toMatchObject({
       operation: 'stage',
-      idempotencyKey: 'staging:OI_H50:invalid:2:H50|PESOP|SPFO-1|01HE01|FASE_ALFA',
       payload: { classification: 'invalid' },
     });
+    expect(result.operations[0].idempotencyKey).toMatch(/^staging:[a-f0-9]{64}$/);
   });
 
   it('aceita formatos legitimos de link do Google Drive e extrai driveFileId', () => {
@@ -582,9 +592,9 @@ describe('legacy importers', () => {
     expect(result).toMatchObject({ valid: 0, invalid: 0 });
     expect(result.operations[0]).toMatchObject({
       operation: 'stage',
-      idempotencyKey: 'staging:OI_H125:ambiguous:2:H125|PEVOP|SPHA-2|04HE04|FASE_DELTA',
       payload: { classification: 'ambiguous' },
     });
+    expect(result.operations[0].idempotencyKey).toMatch(/^staging:[a-f0-9]{64}$/);
     expect(result.issues).toMatchObject([{ code: 'MISSION_PHASE_MISMATCH' }]);
   });
 
@@ -654,7 +664,222 @@ describe('legacy importers', () => {
     const text = JSON.stringify(report);
 
     expect(text).not.toContain('Texto operacional ficticio');
-    expect(text).toContain('oi:H50:PESOP|SPFO-1|01HE01|FASE_ALFA');
+    expect(text).not.toContain('oi:H50:PESOP|SPFO-1|01HE01|FASE_ALFA');
     expect(text).toContain('[REDACTED]');
+  });
+
+  it('importa EMAIL_LOG de cobranca enviada com AVOP legado normalizado', () => {
+    const result = parseEmailLog([
+      { DATA: '06/05/2026 08:00:00', AVOP_ID: 'AVOP-2026-01', ID: 'abc', EMAIL: 'alfa@example.test', TIPO: 'LEMBRETE', STATUS: 'ENVIADO', OBS: 'MARCO_1' },
+    ]);
+
+    expect(result).toMatchObject({ valid: 1, invalid: 0, duplicates: 0 });
+    expect(result.metrics).toMatchObject({ emailsEnviados: 1, emailsCobranca: 1, emailsErro: 0 });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'upsert',
+      payload: {
+        attemptedAt: '2026-05-06T08:00:00-03:00',
+        avopNumber: 'AVOP 01-2026',
+        trigram: 'ABC',
+        recipient: 'alfa@example.test',
+        notificationType: 'COBRANCA',
+        result: 'ENVIADO',
+      },
+    });
+    expect(result.operations[0].idempotencyKey).toMatch(/^email-log:[a-f0-9]{64}$/);
+  });
+
+  it('preserva erro de EMAIL_LOG sem tratar como envio bem-sucedido', () => {
+    const result = parseEmailLog([
+      { DATA: '2026-05-06T08:10:00+02:00', AVOP_ID: 'AVOP 02-2026', ID: 'def', EMAIL: 'bravo@example.test', TIPO: 'LEMBRETE', STATUS: 'ERRO', OBS: 'Falha ficticia SMTP' },
+    ]);
+
+    expect(result).toMatchObject({ valid: 1, invalid: 0 });
+    expect(result.metrics).toMatchObject({ emailsEnviados: 0, emailsErro: 1, emailsCobranca: 1 });
+    expect(result.operations[0]).toMatchObject({
+      payload: {
+        attemptedAt: '2026-05-06T08:10:00+02:00',
+        result: 'ERRO',
+        errorMessage: 'Falha ficticia SMTP',
+      },
+    });
+  });
+
+  it('diferencia divulgacao e teste de cobranca no EMAIL_LOG', () => {
+    const result = parseEmailLog([
+      { DATA: '2026-05-06T08:00:00-03:00', AVOP_ID: 'AVOP 01-2026', ID: 'abc', EMAIL: 'alfa@example.test', TIPO: 'DIVULGACAO', STATUS: 'ENVIADO', OBS: 'ENVIO_INICIAL' },
+      { DATA: '2026-05-06T08:05:00-03:00', AVOP_ID: 'AVOP 02-2026', ID: 'def', EMAIL: 'bravo@example.test', TIPO: 'TESTE_LEMBRETE', STATUS: 'ENVIADO', OBS: 'TESTE_MANUAL' },
+    ]);
+
+    expect(result).toMatchObject({ valid: 2, invalid: 0 });
+    expect(result.metrics).toMatchObject({ emailsDivulgacao: 1, emailsCobranca: 1 });
+    expect(result.operations.map((operation) => operation.payload)).toMatchObject([
+      { notificationType: 'DIVULGACAO' },
+      { notificationType: 'TESTE_COBRANCA' },
+    ]);
+  });
+
+  it('envia EMAIL_LOG sem destinatario para staging ambiguo sem inventar recipiente', () => {
+    const result = parseEmailLog([
+      { DATA: '2026-05-06T08:15:00-03:00', AVOP_ID: '', ID: '', EMAIL: '', TIPO: 'JOB_COBRANCA', STATUS: 'CONCLUIDO', OBS: 'Resumo ficticio' },
+    ]);
+
+    expect(result).toMatchObject({ valid: 0, invalid: 0, metrics: { stagingEmail: 1 } });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'stage',
+      payload: { classification: 'ambiguous', normalized: { recipient: null, notificationType: 'JOB_COBRANCA' } },
+    });
+  });
+
+  it('envia duplicidade de EMAIL_LOG para staging preservando primeiro registro', () => {
+    const row = { DATA: '06/05/2026 08:00:00', AVOP_ID: 'AVOP-2026-01', ID: 'abc', EMAIL: 'alfa@example.test', TIPO: 'LEMBRETE', STATUS: 'ENVIADO', OBS: 'MARCO_1' };
+    const result = parseEmailLog([row, row]);
+
+    expect(result).toMatchObject({ valid: 1, duplicates: 1 });
+    expect(result.operations[0]).toMatchObject({ operation: 'upsert' });
+    expect(result.operations[1]).toMatchObject({ operation: 'stage', payload: { classification: 'duplicate' } });
+  });
+
+  it('classifica ACESSOS_LOG como login valido, login invalido e acesso administrativo', () => {
+    const result = parseAcessosLog([
+      { TIMESTAMP: '06/05/2026 07:55:00', ID: 'abc', MODULO: 'SISTEMA', ACAO: 'LOGIN', DETALHE: 'Sessao emitida', STATUS: 'OK' },
+      { TIMESTAMP: '2026-05-06T08:00:00-03:00', ID: 'zzz', MODULO: 'SISTEMA', ACAO: 'LOGIN', DETALHE: 'Trigrama nao encontrado', STATUS: 'NEGADO' },
+      { TIMESTAMP: '2026-05-06T08:05:00+02:00', ID: 'adm', MODULO: 'ADMIN', ACAO: 'ABRIR_PAINEL', DETALHE: 'Acesso administrativo', STATUS: 'OK' },
+    ]);
+
+    expect(result).toMatchObject({ valid: 3, invalid: 0 });
+    expect(result.metrics).toMatchObject({ loginsValidos: 1, loginsInvalidos: 1, acessosAdmin: 1 });
+    expect(result.operations.map((operation) => operation.payload)).toMatchObject([
+      { occurredAt: '2026-05-06T07:55:00-03:00', trigram: 'ABC', accessType: 'LOGIN_VALIDO' },
+      { occurredAt: '2026-05-06T08:00:00-03:00', trigram: 'ZZZ', accessType: 'LOGIN_INVALIDO' },
+      { occurredAt: '2026-05-06T08:05:00+02:00', trigram: 'ADM', accessType: 'ACESSO_ADMINISTRATIVO' },
+    ]);
+  });
+
+  it('envia ACESSOS_LOG ambiguo e duplicado para staging', () => {
+    const row = { TIMESTAMP: '06/05/2026 07:55:00', ID: 'abc', MODULO: 'SISTEMA', ACAO: 'LOGIN', DETALHE: 'Sessao emitida', STATUS: 'OK' };
+    const result = parseAcessosLog([
+      row,
+      row,
+      { TIMESTAMP: '2026-05-06T08:20:00-03:00', ID: '', MODULO: 'SISTEMA', ACAO: 'ACESSO', DETALHE: 'Sem identidade', STATUS: 'OK' },
+    ]);
+
+    expect(result).toMatchObject({ valid: 1, duplicates: 1, invalid: 0 });
+    expect(result.metrics).toMatchObject({ stagingAcessos: 2 });
+    expect(result.operations[1]).toMatchObject({ operation: 'stage', payload: { classification: 'duplicate' } });
+    expect(result.operations[2]).toMatchObject({ operation: 'stage', payload: { classification: 'ambiguous' } });
+  });
+
+  it('mantem idempotencia deterministica dos logs sem expor email ou trigrama na chave', () => {
+    const emailRow = { DATA: '06/05/2026 08:00:00', AVOP_ID: 'AVOP-2026-01', ID: 'abc', EMAIL: 'alfa@example.test', TIPO: 'LEMBRETE', STATUS: 'ENVIADO', OBS: 'MARCO_1' };
+    const accessRow = { TIMESTAMP: '06/05/2026 07:55:00', ID: 'abc', MODULO: 'SISTEMA', ACAO: 'LOGIN', DETALHE: 'Sessao emitida', STATUS: 'OK' };
+
+    const emailKey = parseEmailLog([emailRow]).operations[0].idempotencyKey;
+    const accessKey = parseAcessosLog([accessRow]).operations[0].idempotencyKey;
+
+    expect(emailKey).toBe(parseEmailLog([emailRow]).operations[0].idempotencyKey);
+    expect(accessKey).toBe(parseAcessosLog([accessRow]).operations[0].idempotencyKey);
+    expect(emailKey).not.toContain('alfa@example.test');
+    expect(emailKey).not.toContain('ABC');
+    expect(accessKey).not.toContain('ABC');
+  });
+
+  it('redact oculta dados identificaveis de EMAIL_LOG e ACESSOS_LOG em qualquer nivel', () => {
+    const email = parseEmailLog([
+      { DATA: '06/05/2026 08:00:00', AVOP_ID: 'AVOP-2026-01', ID: 'abc', EMAIL: 'alfa@example.test', TIPO: 'LEMBRETE', STATUS: 'ERRO', OBS: 'Erro pessoal ficticio' },
+    ]);
+    const access = parseAcessosLog([
+      { TIMESTAMP: '06/05/2026 07:55:00', ID: 'abc', MODULO: 'SISTEMA', ACAO: 'LOGIN', DETALHE: 'Detalhe pessoal ficticio', STATUS: 'OK', IP: '192.0.2.10', USER_AGENT: 'Agente ficticio' },
+    ]);
+    const report = buildImportReport([email, access], '2026-01-01T00:00:00.000Z', { redact: true });
+    const text = JSON.stringify(report);
+
+    expect(text).not.toContain('alfa@example.test');
+    expect(text).not.toContain('Erro pessoal ficticio');
+    expect(text).not.toContain('Detalhe pessoal ficticio');
+    expect(text).not.toContain('192.0.2.10');
+    expect(text).not.toContain('Agente ficticio');
+    expect(text).not.toContain('ABC');
+    expect(text).not.toMatch(/email-log:[a-f0-9]{64}/);
+    expect(text).not.toMatch(/access-log:[a-f0-9]{64}/);
+    expect(text).toContain('"idempotencyKey":"[REDACTED]"');
+    expect(text).toContain('[REDACTED]');
+  });
+
+  it('mantem o mesmo conjunto de chaves quando logs sao reordenados', () => {
+    const emailRow = { DATA: '06/05/2026 08:00:00', AVOP_ID: 'AVOP-2026-01', ID: 'abc', EMAIL: 'alfa@example.test', TIPO: 'LEMBRETE', STATUS: 'ENVIADO', OBS: 'MARCO_1' };
+    const jobRow = { DATA: '2026-05-06T08:15:00-03:00', AVOP_ID: '', ID: '', EMAIL: '', TIPO: 'JOB_COBRANCA', STATUS: 'CONCLUIDO', OBS: 'Resumo ficticio' };
+
+    const firstKeys = parseEmailLog([emailRow, emailRow, jobRow]).operations.map((operation) => operation.idempotencyKey).sort();
+    const reversedKeys = parseEmailLog([jobRow, emailRow, emailRow]).operations.map((operation) => operation.idempotencyKey).sort();
+
+    expect(firstKeys).toEqual(reversedKeys);
+  });
+
+  it('mantem identidade de staging quando o registro muda de linha', () => {
+    const validRow = { TIMESTAMP: '06/05/2026 07:55:00', ID: 'abc', MODULO: 'SISTEMA', ACAO: 'LOGIN', DETALHE: 'Sessao emitida', STATUS: 'OK' };
+    const ambiguousRow = { TIMESTAMP: '2026-05-06T08:20:00-03:00', ID: '', MODULO: 'SISTEMA', ACAO: 'ACESSO', DETALHE: 'Sem identidade', STATUS: 'OK' };
+
+    const first = parseAcessosLog([ambiguousRow]);
+    const shifted = parseAcessosLog([validRow, ambiguousRow]);
+
+    expect(first.operations[0].idempotencyKey).toBe(shifted.operations[1].idempotencyKey);
+    expect((first.operations[0].payload as { rowNumber: number }).rowNumber).toBe(2);
+    expect((shifted.operations[1].payload as { rowNumber: number }).rowNumber).toBe(3);
+  });
+
+  it('diferencia duas e tres ocorrencias exatamente identicas sem depender da linha fisica', () => {
+    const row = { DATA: '06/05/2026 08:00:00', AVOP_ID: 'AVOP-2026-01', ID: 'abc', EMAIL: 'alfa@example.test', TIPO: 'LEMBRETE', STATUS: 'ENVIADO', OBS: 'MARCO_1' };
+
+    const two = parseEmailLog([row, row]).operations.map((operation) => operation.idempotencyKey);
+    const three = parseEmailLog([row, row, row]).operations.map((operation) => operation.idempotencyKey);
+
+    expect(two[1]).toMatch(/^staging:[a-f0-9]{64}$/);
+    expect(three.slice(1).sort()).toEqual([`${two[1]}:1`, `${two[1]}:2`]);
+  });
+
+  it('gera chave diferente quando o conteudo real do staging muda', () => {
+    const first = parseEmailLog([
+      { DATA: '2026-05-06T08:15:00-03:00', AVOP_ID: '', ID: '', EMAIL: '', TIPO: 'JOB_COBRANCA', STATUS: 'CONCLUIDO', OBS: 'Resumo ficticio A' },
+    ]);
+    const second = parseEmailLog([
+      { DATA: '2026-05-06T08:15:00-03:00', AVOP_ID: '', ID: '', EMAIL: '', TIPO: 'JOB_COBRANCA', STATUS: 'CONCLUIDO', OBS: 'Resumo ficticio B' },
+    ]);
+
+    expect(first.operations[0].idempotencyKey).not.toBe(second.operations[0].idempotencyKey);
+    expect(first.operations[0].idempotencyKey).toMatch(/^staging:[a-f0-9]{64}$/);
+    expect(second.operations[0].idempotencyKey).toMatch(/^staging:[a-f0-9]{64}$/);
+  });
+
+  it('mantem classificacao correta de invalidos, ambiguos e duplicados com chaves SHA-256', () => {
+    const duplicate = parseEmailLog([
+      { DATA: '06/05/2026 08:00:00', AVOP_ID: 'AVOP-2026-01', ID: 'abc', EMAIL: 'alfa@example.test', TIPO: 'LEMBRETE', STATUS: 'ENVIADO', OBS: 'MARCO_1' },
+      { DATA: '06/05/2026 08:00:00', AVOP_ID: 'AVOP-2026-01', ID: 'abc', EMAIL: 'alfa@example.test', TIPO: 'LEMBRETE', STATUS: 'ENVIADO', OBS: 'MARCO_1' },
+    ]);
+    const ambiguous = parseEmailLog([
+      { DATA: '2026-05-06T08:15:00-03:00', AVOP_ID: '', ID: '', EMAIL: '', TIPO: 'JOB_COBRANCA', STATUS: 'CONCLUIDO', OBS: 'Resumo ficticio' },
+    ]);
+    const invalid = parseOiH50([
+      {
+        OI_KEY: 'PESOP|SPFO-1|01HE01|FASE_ALFA',
+        PROGRAMA: 'PESOP',
+        SUBPROGRAMA: 'SPFO-1',
+        FASE_ID: '01HE01',
+        TITULO: 'Fase ficticia alfa',
+        PDF_URL: 'https://exemplo.invalid/arquivo.pdf',
+        PAG_INICIAL: '10',
+        PAG_FINAL: '12',
+        TIPO: 'FASE_ALFA',
+        STATUS: 'ATIVO',
+        CHAVE_EXIBICAO: '01HE01 - Fase ficticia alfa',
+      },
+    ]);
+
+    expect(duplicate.operations[1]).toMatchObject({ operation: 'stage', payload: { classification: 'duplicate' } });
+    expect(ambiguous.operations[0]).toMatchObject({ operation: 'stage', payload: { classification: 'ambiguous' } });
+    expect(invalid.operations[0]).toMatchObject({ operation: 'stage', payload: { classification: 'invalid' } });
+    [duplicate.operations[1], ambiguous.operations[0], invalid.operations[0]].forEach((operation) => {
+      expect(operation.idempotencyKey).toMatch(/^staging:[a-f0-9]{64}(?::\d+)?$/);
+    });
   });
 });

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   extractDriveFileId,
   normalizeAudienceList,
@@ -10,6 +12,8 @@ import { extractMissionCodes, extractPhaseCodes, normalizeOiCompact } from '../d
 import type {
   AprontoPayload,
   AvopPayload,
+  AccessLogPayload,
+  EmailLogPayload,
   EfetivoPayload,
   HistoricalStagingPayload,
   ImportIssue,
@@ -30,12 +34,16 @@ const REQUIRED_COLUMNS: Record<SheetKind, string[]> = {
   PRESENCAS: ['APRONTO_ID', 'ID'],
   OI_H50: ['OI_KEY', 'PROGRAMA', 'SUBPROGRAMA', 'FASE_ID', 'TITULO', 'PDF_URL', 'PAG_INICIAL', 'PAG_FINAL', 'TIPO', 'STATUS', 'CHAVE_EXIBICAO'],
   OI_H125: ['OI_KEY', 'PROGRAMA', 'SUBPROGRAMA', 'FASE_ID', 'TITULO', 'PDF_URL', 'PAG_INICIAL', 'PAG_FINAL', 'TIPO', 'STATUS', 'CHAVE_EXIBICAO'],
+  EMAIL_LOG: ['DATA', 'TIPO', 'STATUS'],
+  ACESSOS_LOG: ['TIMESTAMP', 'MODULO', 'ACAO', 'STATUS'],
 };
 
 const CANONICAL_AUDIENCES = new Set(['PILOTO', 'TRIPULANTE', 'HSAR', 'TODOS']);
 const KNOWN_BRIEFING_STATUSES = new Set(['ABERTO', 'FECHADO', 'DRAFT']);
 const KNOWN_ATTENDANCE_STATUSES = new Set(['PRESENTE', 'JUSTIFICADO', 'AUSENTE', 'PENDENTE']);
 const KNOWN_OI_STATUSES = new Set(['ATIVO', 'INATIVO']);
+const KNOWN_EMAIL_RESULTS = new Set(['ENVIADO', 'ERRO', 'INICIADO', 'CONCLUIDO']);
+const KNOWN_ACCESS_STATUSES = new Set(['OK', 'NEGADO', 'ERRO']);
 
 type Parser<TPayload extends Record<string, unknown>> = {
   sheet: SheetKind;
@@ -123,6 +131,52 @@ export function parseOiH125(rows: RawRow[]): SheetImportResult<OiPayload> {
   return parseOiRows(rows, 'OI_H125', 'H125');
 }
 
+export function parseEmailLog(rows: RawRow[]): SheetImportResult<EmailLogPayload> {
+  const result = parseSheet(rows, {
+    sheet: 'EMAIL_LOG',
+    duplicateKey: emailLogDuplicateKey,
+    parseRow: parseEmailLogRow,
+    stageDuplicate: true,
+  });
+
+  return {
+    ...result,
+    metrics: buildEmailLogMetrics(
+      result.operations
+        .filter((operation) => operation.operation !== 'stage')
+        .map((operation) => operation.payload)
+        .filter(isEmailLogPayload),
+      result.operations
+        .filter((operation) => operation.operation === 'stage')
+        .map((operation) => operation.payload)
+        .filter(isStagingPayload),
+    ),
+  };
+}
+
+export function parseAcessosLog(rows: RawRow[]): SheetImportResult<AccessLogPayload> {
+  const result = parseSheet(rows, {
+    sheet: 'ACESSOS_LOG',
+    duplicateKey: accessLogDuplicateKey,
+    parseRow: parseAccessLogRow,
+    stageDuplicate: true,
+  });
+
+  return {
+    ...result,
+    metrics: buildAccessLogMetrics(
+      result.operations
+        .filter((operation) => operation.operation !== 'stage')
+        .map((operation) => operation.payload)
+        .filter(isAccessLogPayload),
+      result.operations
+        .filter((operation) => operation.operation === 'stage')
+        .map((operation) => operation.payload)
+        .filter(isStagingPayload),
+    ),
+  };
+}
+
 function parseOiRows(rows: RawRow[], sheet: 'OI_H50' | 'OI_H125', aircraft: OiPayload['aircraft']): SheetImportResult<OiPayload> {
   const issues: ImportIssue[] = [];
   const operations: Array<ImportOperation<OiPayload | HistoricalStagingPayload>> = [];
@@ -190,11 +244,12 @@ function parseOiRows(rows: RawRow[], sheet: 'OI_H50' | 'OI_H125', aircraft: OiPa
     operations.push(parsed.operation);
   });
 
-  const validOiPayloads = operations
+  const finalizedOperations = finalizeStagingIdentities(operations);
+  const validOiPayloads = finalizedOperations
     .filter((operation) => operation.operation !== 'stage')
     .map((operation) => operation.payload)
     .filter(isOiPayload);
-  const stagedPayloads = operations
+  const stagedPayloads = finalizedOperations
     .filter((operation) => operation.operation === 'stage')
     .map((operation) => operation.payload)
     .filter(isStagingPayload);
@@ -207,7 +262,7 @@ function parseOiRows(rows: RawRow[], sheet: 'OI_H50' | 'OI_H125', aircraft: OiPa
     duplicates,
     normalized,
     issues,
-    operations,
+    operations: finalizedOperations,
     metrics: oiMetrics(aircraft, validOiPayloads, stagedPayloads),
   };
 }
@@ -272,7 +327,8 @@ function parseSheet<TPayload extends Record<string, unknown>>(
     operations.push(parsed.operation);
   });
 
-  const definitiveOperations = operations.filter((operation) => operation.operation !== 'stage');
+  const finalizedOperations = finalizeStagingIdentities(operations);
+  const definitiveOperations = finalizedOperations.filter((operation) => operation.operation !== 'stage');
 
   return {
     sheet: parser.sheet,
@@ -282,7 +338,7 @@ function parseSheet<TPayload extends Record<string, unknown>>(
     duplicates,
     normalized,
     issues,
-    operations,
+    operations: finalizedOperations,
   };
 }
 
@@ -723,6 +779,148 @@ function parseOiRow(
   };
 }
 
+function parseEmailLogRow(row: RawRow, rowNumber: number): ParsedRow<EmailLogPayload> {
+  const attemptedAt = normalizeTimestamp(row.DATA || row.TIMESTAMP || row.DATA_HORA);
+  const originalAvopId = normalizeText(row.AVOP_ID);
+  const avopNumber = originalAvopId ? normalizeAvopNumber(originalAvopId) : null;
+  const originalId = normalizeText(row.ID);
+  const trigram = originalId ? normalizeTrigram(originalId) : null;
+  const recipient = normalizeText(row.EMAIL || row.DESTINATARIO || row.RECIPIENTE);
+  const originalType = normalizeUpper(row.TIPO || row.EVENTO);
+  const notificationType = normalizeEmailType(originalType);
+  const originalResult = normalizeUpper(row.STATUS || row.RESULTADO);
+  const result = normalizeEmailResult(originalResult);
+  const observation = normalizeText(row.OBS || row.DETALHE || row.MENSAGEM) || null;
+  const errorMessage = result === 'ERRO' ? observation : null;
+  const errors = requiredValueIssues('EMAIL_LOG', rowNumber, row, [
+    ['DATA', attemptedAt],
+    ['TIPO', originalType],
+    ['STATUS', originalResult],
+  ]);
+  const warnings: ImportIssue[] = [];
+
+  if (result === 'OUTRO') {
+    warnings.push(warningIssue('EMAIL_LOG', rowNumber, 'UNKNOWN_EMAIL_RESULT', `Resultado de e-mail desconhecido preservado para auditoria: ${originalResult}.`, row));
+  }
+
+  if (notificationType === 'OUTRO') {
+    warnings.push(warningIssue('EMAIL_LOG', rowNumber, 'UNKNOWN_EMAIL_TYPE', `Tipo de e-mail desconhecido preservado para auditoria: ${originalType}.`, row));
+  }
+
+  if (errors.length) return { ok: false, issues: errors };
+
+  const normalized = {
+    attemptedAt,
+    avopNumber,
+    trigram,
+    recipient: recipient || null,
+    notificationType,
+    originalType,
+    result,
+    originalResult,
+    errorMessage,
+    observation,
+    source: 'EMAIL_LOG',
+    originalAvopId,
+    originalId,
+  };
+
+  if (!recipient) {
+    const issue = warningIssue('EMAIL_LOG', rowNumber, 'MISSING_RECIPIENT', 'Linha de EMAIL_LOG sem destinatario. Registro preservado sem inventar recipiente.', row);
+    return {
+      ok: true,
+      normalized: originalAvopId !== (avopNumber ?? '') || originalId !== (trigram ?? ''),
+      warnings: [...warnings, issue],
+      operation: createStagingOperation('EMAIL_LOG', rowNumber, row, normalized, [...warnings, issue], 'ambiguous', emailLogSourceKey(normalized)),
+    };
+  }
+
+  const payload: EmailLogPayload = {
+    ...normalized,
+    recipient,
+    source: 'EMAIL_LOG',
+  };
+
+  return {
+    ok: true,
+    normalized: originalAvopId !== (avopNumber ?? '') || originalId !== (trigram ?? '') || originalType !== notificationType || originalResult !== result,
+    warnings,
+    operation: {
+      sheet: 'EMAIL_LOG',
+      operation: 'upsert',
+      idempotencyKey: `email-log:${emailLogDuplicateKey(payload)}`,
+      payload,
+      original: row,
+    },
+  };
+}
+
+function parseAccessLogRow(row: RawRow, rowNumber: number): ParsedRow<AccessLogPayload> {
+  const occurredAt = normalizeTimestamp(row.TIMESTAMP || row.DATA || row.DATA_HORA);
+  const originalId = normalizeText(row.ID);
+  const trigram = originalId ? normalizeTrigram(originalId) : null;
+  const accessModule = normalizeUpper(row.MODULO);
+  const action = normalizeUpper(row.ACAO);
+  const detail = normalizeText(row.DETALHE || row.OBS || row.MENSAGEM) || null;
+  const rawStatus = normalizeUpper(row.STATUS || row.RESULTADO);
+  const status = normalizeAccessStatus(rawStatus);
+  const accessType = inferAccessType(accessModule, action, status, detail);
+  const entityType = accessModule || 'SISTEMA';
+  const entityId = trigram || action || accessModule;
+  const errors = requiredValueIssues('ACESSOS_LOG', rowNumber, row, [
+    ['TIMESTAMP', occurredAt],
+    ['MODULO', accessModule],
+    ['ACAO', action],
+    ['STATUS', rawStatus],
+  ]);
+  const warnings: ImportIssue[] = [];
+
+  if (status === 'OUTRO') {
+    warnings.push(warningIssue('ACESSOS_LOG', rowNumber, 'UNKNOWN_ACCESS_STATUS', `Status de acesso desconhecido preservado para auditoria: ${rawStatus}.`, row));
+  }
+
+  if (errors.length) return { ok: false, issues: errors };
+
+  const normalized: AccessLogPayload = {
+    occurredAt,
+    trigram,
+    module: accessModule,
+    action,
+    detail,
+    status,
+    accessType,
+    entityType,
+    entityId,
+    source: 'ACESSOS_LOG',
+    originalId,
+  };
+
+  if (!trigram && status === 'OK') {
+    const issue = warningIssue('ACESSOS_LOG', rowNumber, 'MISSING_ACTOR_FOR_OK_ACCESS', 'Acesso OK sem trigrama. Registro preservado sem inventar identidade.', row);
+    return {
+      ok: true,
+      normalized: originalId !== (trigram ?? ''),
+      warnings: [...warnings, issue],
+      operation: createStagingOperation('ACESSOS_LOG', rowNumber, row, normalized, [...warnings, issue], 'ambiguous', accessLogSourceKey(normalized)),
+    };
+  }
+
+  const payload: AccessLogPayload = normalized;
+
+  return {
+    ok: true,
+    normalized: originalId !== (trigram ?? '') || rawStatus !== status,
+    warnings,
+    operation: {
+      sheet: 'ACESSOS_LOG',
+      operation: 'upsert',
+      idempotencyKey: `access-log:${accessLogDuplicateKey(payload)}`,
+      payload,
+      original: row,
+    },
+  };
+}
+
 function validateColumns(sheet: SheetKind, rows: RawRow[]): ImportIssue[] {
   const sample = rows[0] ?? {};
   const headers = new Set(Object.keys(sample));
@@ -839,6 +1037,39 @@ function normalizeOptionalIsoDate(value: unknown): string | null {
   return normalizeIsoDate(text) || null;
 }
 
+function normalizeTimestamp(value: unknown): string {
+  const text = normalizeText(value);
+  if (!text) return '';
+
+  const br = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (br) {
+    const date = validDateParts(Number(br[3]), Number(br[2]), Number(br[1]));
+    if (!date) return '';
+    const hour = (br[4] ?? '0').padStart(2, '0');
+    const minute = (br[5] ?? '0').padStart(2, '0');
+    const second = (br[6] ?? '0').padStart(2, '0');
+    return `${date}T${hour}:${minute}:${second}-03:00`;
+  }
+
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/i);
+  if (!iso) return '';
+
+  const date = validDateParts(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  if (!date) return '';
+  const hour = (iso[4] ?? '0').padStart(2, '0');
+  const minute = (iso[5] ?? '0').padStart(2, '0');
+  const second = (iso[6] ?? '0').padStart(2, '0');
+  const offset = normalizeOffset(iso[7] ?? '-03:00');
+  return `${date}T${hour}:${minute}:${second}${offset}`;
+}
+
+function normalizeOffset(value: string): string {
+  const upper = value.toUpperCase();
+  if (upper === 'Z') return 'Z';
+  const match = upper.match(/^([+-]\d{2}):?(\d{2})$/);
+  return match ? `${match[1]}:${match[2]}` : '-03:00';
+}
+
 function validDateParts(year: number, month: number, day: number): string {
   const date = new Date(Date.UTC(year, month - 1, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
@@ -882,6 +1113,146 @@ function unknownStatusIssues(
   return [warningIssue(sheet, rowNumber, code, `Status desconhecido preservado para auditoria: ${status}.`, row)];
 }
 
+function normalizeEmailType(value: string): EmailLogPayload['notificationType'] {
+  if (value === 'LEMBRETE') return 'COBRANCA';
+  if (value === 'TESTE_LEMBRETE') return 'TESTE_COBRANCA';
+  if (value === 'DIVULGACAO' || value === 'DIVULGAÇÃO') return 'DIVULGACAO';
+  if (value === 'JOB_COBRANCA') return 'JOB_COBRANCA';
+  return 'OUTRO';
+}
+
+function normalizeEmailResult(value: string): EmailLogPayload['result'] {
+  if (KNOWN_EMAIL_RESULTS.has(value)) return value as EmailLogPayload['result'];
+  return 'OUTRO';
+}
+
+function normalizeAccessStatus(value: string): AccessLogPayload['status'] {
+  if (KNOWN_ACCESS_STATUSES.has(value)) return value as AccessLogPayload['status'];
+  return 'OUTRO';
+}
+
+function inferAccessType(
+  module: string,
+  action: string,
+  status: AccessLogPayload['status'],
+  detail: string | null,
+): AccessLogPayload['accessType'] {
+  if (module === 'ADMIN' || action.includes('ADMIN')) return 'ACESSO_ADMINISTRATIVO';
+  if (action === 'LOGIN' && status === 'OK') return 'LOGIN_VALIDO';
+  if (action === 'LOGIN' && status === 'NEGADO') return 'LOGIN_INVALIDO';
+  if (status === 'NEGADO' && normalizeUpper(detail).includes('TRIGRAMA')) return 'LOGIN_INVALIDO';
+  if (action) return 'ACESSO';
+  return 'OUTRO';
+}
+
+function emailLogDuplicateKey(payload: EmailLogPayload): string {
+  return sha256([
+    payload.attemptedAt,
+    payload.avopNumber ?? '',
+    payload.trigram ?? '',
+    payload.recipient,
+    payload.notificationType,
+    payload.result,
+    payload.errorMessage ?? '',
+    payload.observation ?? '',
+  ].join('|'));
+}
+
+function emailLogSourceKey(payload: Record<string, unknown>): string {
+  return sha256(
+    [
+      payload.attemptedAt,
+      payload.avopNumber,
+      payload.trigram,
+      payload.recipient,
+      payload.notificationType,
+      payload.result,
+      payload.errorMessage,
+      payload.observation,
+    ].join('|'),
+  );
+}
+
+function accessLogDuplicateKey(payload: AccessLogPayload): string {
+  return sha256([
+    payload.occurredAt,
+    payload.trigram ?? '',
+    payload.module,
+    payload.action,
+    payload.detail ?? '',
+    payload.status,
+    payload.accessType,
+  ].join('|'));
+}
+
+function accessLogSourceKey(payload: Record<string, unknown>): string {
+  return sha256(
+    [
+      payload.occurredAt,
+      payload.trigram,
+      payload.module,
+      payload.action,
+      payload.detail,
+      payload.status,
+      payload.accessType,
+    ].join('|'),
+  );
+}
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function canonicalSerialize(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalSerialize).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${canonicalSerialize(entryValue)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function stagingFingerprint(
+  sheet: SheetKind,
+  classification: HistoricalStagingPayload['classification'],
+  sourceKey: string,
+  normalized: RawRow | null,
+  original: RawRow,
+): string {
+  return sha256(
+    canonicalSerialize({
+      sheet,
+      classification,
+      sourceKey,
+      normalized,
+      original,
+    }),
+  );
+}
+
+function finalizeStagingIdentities<TPayload extends Record<string, unknown>>(
+  operations: Array<ImportOperation<TPayload | HistoricalStagingPayload>>,
+): Array<ImportOperation<TPayload | HistoricalStagingPayload>> {
+  const stagedKeys = operations
+    .filter((operation) => operation.operation === 'stage')
+    .map((operation) => operation.idempotencyKey);
+  const totals = stagedKeys.reduce((counts, key) => counts.set(key, (counts.get(key) ?? 0) + 1), new Map<string, number>());
+  const seen = new Map<string, number>();
+
+  return operations.map((operation) => {
+    if (operation.operation !== 'stage') return operation;
+    const count = (seen.get(operation.idempotencyKey) ?? 0) + 1;
+    seen.set(operation.idempotencyKey, count);
+    const suffix = (totals.get(operation.idempotencyKey) ?? 0) > 1 ? `:${count}` : '';
+    return {
+      ...operation,
+      idempotencyKey: `${operation.idempotencyKey}${suffix}`,
+    };
+  });
+}
+
 function errorIssue(sheet: SheetKind, rowNumber: number, code: string, message: string, raw: RawRow): ImportIssue {
   return {
     sheet,
@@ -919,6 +1290,28 @@ function buildPresencaMetrics(rows: PresencaPayload[], stagedRows: HistoricalSta
   };
 }
 
+function buildEmailLogMetrics(rows: EmailLogPayload[], stagedRows: HistoricalStagingPayload[] = []): Record<string, number> {
+  return {
+    emailsEnviados: rows.filter((row) => row.result === 'ENVIADO').length,
+    emailsErro: rows.filter((row) => row.result === 'ERRO').length,
+    emailsCobranca: rows.filter((row) => row.notificationType === 'COBRANCA' || row.notificationType === 'TESTE_COBRANCA').length,
+    emailsDivulgacao: rows.filter((row) => row.notificationType === 'DIVULGACAO').length,
+    emailsOutros: rows.filter((row) => row.notificationType === 'OUTRO').length,
+    stagingEmail: stagedRows.length,
+  };
+}
+
+function buildAccessLogMetrics(rows: AccessLogPayload[], stagedRows: HistoricalStagingPayload[] = []): Record<string, number> {
+  return {
+    acessosOk: rows.filter((row) => row.status === 'OK').length,
+    acessosNegados: rows.filter((row) => row.status === 'NEGADO').length,
+    loginsValidos: rows.filter((row) => row.accessType === 'LOGIN_VALIDO').length,
+    loginsInvalidos: rows.filter((row) => row.accessType === 'LOGIN_INVALIDO').length,
+    acessosAdmin: rows.filter((row) => row.accessType === 'ACESSO_ADMINISTRATIVO').length,
+    stagingAcessos: stagedRows.length,
+  };
+}
+
 function createStagingOperation(
   sheet: SheetKind,
   rowNumber: number,
@@ -952,7 +1345,7 @@ function createStagingOperation(
   return {
     sheet,
     operation: 'stage',
-    idempotencyKey: `staging:${sheet}:${classification}:${rowNumber}:${sourceKey}`,
+    idempotencyKey: `staging:${stagingFingerprint(sheet, classification, sourceKey, normalized, original)}`,
     payload,
     original,
   };
@@ -973,6 +1366,14 @@ function isAprontoPayload(payload: AprontoPayload | HistoricalStagingPayload): p
 
 function isOiPayload(payload: OiPayload | HistoricalStagingPayload): payload is OiPayload {
   return 'source' in payload && (payload.source === 'OI_H50' || payload.source === 'OI_H125');
+}
+
+function isEmailLogPayload(payload: EmailLogPayload | HistoricalStagingPayload): payload is EmailLogPayload {
+  return 'source' in payload && payload.source === 'EMAIL_LOG';
+}
+
+function isAccessLogPayload(payload: AccessLogPayload | HistoricalStagingPayload): payload is AccessLogPayload {
+  return 'source' in payload && payload.source === 'ACESSOS_LOG';
 }
 
 function isNormalizedValue(normalized: RawRow | null, key: string): boolean {

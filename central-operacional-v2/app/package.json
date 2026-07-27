@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "import:dry-run": "node --experimental-strip-types scripts/import-dry-run.ts --efetivo fixtures/import/efetivo.csv --avops fixtures/import/avops.csv --leituras fixtures/import/leituras.csv --aprontos fixtures/import/aprontos.csv --presencas fixtures/import/presencas.csv --oi-h50 fixtures/import/oi_h50.csv --oi-h125 fixtures/import/oi_h125.csv",
+    "import:dry-run": "node --experimental-strip-types scripts/import-dry-run.ts --efetivo fixtures/import/efetivo.csv --avops fixtures/import/avops.csv --leituras fixtures/import/leituras.csv --aprontos fixtures/import/aprontos.csv --presencas fixtures/import/presencas.csv --oi-h50 fixtures/import/oi_h50.csv --oi-h125 fixtures/import/oi_h125.csv --email-log fixtures/import/email_log.csv --acessos-log fixtures/import/acessos_log.csv",
     "test": "vitest run",
     "test:watch": "vitest"
   },

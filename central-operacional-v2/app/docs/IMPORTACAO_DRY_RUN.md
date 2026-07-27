@@ -10,6 +10,7 @@ Validar arquivos exportados da base legada antes de qualquer gravacao real. Nest
 - nao grava no Supabase;
 - preserva os valores originais em cada operacao preparada;
 - gera relatorio de leitura, validacao, normalizacao, duplicidade e operacoes idempotentes.
+- usa SHA-256 para identidades derivadas de conteudo sensivel, sem incluir numero fisico da linha.
 
 ## Comando
 
@@ -32,6 +33,8 @@ O comando padrao usa fixtures ficticias em:
 - `fixtures/import/presencas.csv`
 - `fixtures/import/oi_h50.csv`
 - `fixtures/import/oi_h125.csv`
+- `fixtures/import/email_log.csv`
+- `fixtures/import/acessos_log.csv`
 
 ## Formatos aceitos
 
@@ -204,6 +207,57 @@ Linhas sem link de documento sao enviadas ao staging como `invalid`. Linhas com 
 
 As metricas de OI sao separadas por aeronave e incluem `validosOi`, `invalidosOi`, `ambiguosOi`, `duplicadosOi` e `stagedOi`.
 
+### EMAIL_LOG
+
+Colunas obrigatorias:
+
+- `DATA`
+- `TIPO`
+- `STATUS`
+
+Colunas opcionais reconhecidas:
+
+- `AVOP_ID`
+- `ID`
+- `EMAIL`
+- `DESTINATARIO`
+- `RECIPIENTE`
+- `OBS`
+- `DETALHE`
+- `MENSAGEM`
+
+O importador normaliza `AVOP_ID`, trigrama, data/hora, tipo e resultado. `LEMBRETE` e `TESTE_LEMBRETE` sao classificados como cobranca; `DIVULGACAO` e classificado como divulgacao; `JOB_COBRANCA` e preservado como evento de job quando aparecer.
+
+Registros com `STATUS = ERRO` preservam a mensagem de erro em `errorMessage` e nao sao contabilizados como envio bem-sucedido. Linhas sem destinatario nao sao escritas como notificacao definitiva, porque `notification_log.recipient` e obrigatorio; elas seguem para staging como `ambiguous`, sem inventar recipiente.
+
+Duplicidades usam chave deterministica SHA-256 baseada nos campos normalizados. A primeira ocorrencia valida permanece como operacao definitiva e a duplicata segue para staging.
+
+Metricas especificas: `emailsEnviados`, `emailsErro`, `emailsCobranca`, `emailsDivulgacao`, `emailsOutros` e `stagingEmail`.
+
+### ACESSOS_LOG
+
+Colunas obrigatorias:
+
+- `TIMESTAMP`
+- `MODULO`
+- `ACAO`
+- `STATUS`
+
+Colunas opcionais reconhecidas:
+
+- `ID`
+- `DETALHE`
+- `OBS`
+- `MENSAGEM`
+- `IP`
+- `USER_AGENT`
+
+O importador normaliza trigrama, modulo, acao, status e data/hora. `LOGIN` com `OK` vira `LOGIN_VALIDO`; `LOGIN` com `NEGADO` vira `LOGIN_INVALIDO`; modulo `ADMIN` ou acao contendo `ADMIN` vira `ACESSO_ADMINISTRATIVO`.
+
+Acesso `OK` sem trigrama e preservado em staging como `ambiguous`, pois nao ha evidencia suficiente para vincular a identidade. Registros duplicados tambem seguem para staging, preservando o primeiro registro valido.
+
+Metricas especificas: `acessosOk`, `acessosNegados`, `loginsValidos`, `loginsInvalidos`, `acessosAdmin` e `stagingAcessos`.
+
 ## Relatorio
 
 O relatorio JSON contem:
@@ -223,9 +277,23 @@ Para staging de presencas, as metricas tambem incluem `stagingAmbiguos` e `stagi
 
 Para OI, as metricas indicam separadamente os registros de H-50 e H-125, alem de registros validos, invalidos, ambiguos, duplicados e enviados ao staging.
 
-Por padrao, o relatorio preserva os valores originais para auditoria, incluindo nome, e-mail, justificativas e textos de OI quando existirem. Relatorios gerados a partir de dados reais nao devem ser compartilhados sem sanitizacao. Use `--redact` para ocultar `NOME`, `EMAIL`, `name`, `OBS`, `JUSTIFICATIVA`, `justificationText`, `TITULO`, `title`, `CHAVE_EXIBICAO` e `displayKey` no JSON gerado.
+Por padrao, o relatorio preserva os valores originais para auditoria, incluindo nome, e-mail, trigramas, destinatarios, justificativas, erros, IP, user-agent e textos de OI quando existirem. Relatorios gerados a partir de dados reais nao devem ser compartilhados sem sanitizacao. Use `--redact` para ocultar `NOME`, `EMAIL`, `ID`, `trigram`, `recipient`, `OBS`, `DETALHE`, `MENSAGEM`, `errorMessage`, `IP`, `USER_AGENT`, `JUSTIFICATIVA`, `justificationText`, `TITULO`, `title`, `CHAVE_EXIBICAO` e `displayKey` no JSON gerado.
 
-O `--redact` tambem sanitiza conteudos aninhados de staging, incluindo `original`, `normalized`, `original_content` e payloads preparados para compartilhamento.
+O `--redact` tambem sanitiza conteudos aninhados de staging, incluindo `original`, `normalized`, `original_content` e payloads preparados para compartilhamento. As `idempotencyKey` tambem sao ocultadas no relatorio compartilhavel, porque podem ser derivadas de e-mail, trigrama, IP, user-agent ou outros dados identificaveis.
+
+## Identidade idempotente
+
+As operacoes definitivas de `EMAIL_LOG` e `ACESSOS_LOG` usam `idempotencyKey` com SHA-256 dos campos normalizados relevantes. Isso evita expor diretamente e-mail, trigrama, IP ou texto de erro na chave operacional.
+
+As operacoes `stage` usam fingerprint SHA-256 calculado a partir de:
+
+- aba/origem;
+- classificacao (`invalid`, `ambiguous`, `duplicate`, etc.);
+- chave de origem normalizada quando existir;
+- conteudo normalizado relevante;
+- conteudo original serializado de forma canonica.
+
+O `rowNumber` nao participa da identidade. Ele permanece apenas no payload de staging como metadado de auditoria para localizar a linha original. Se houver duas ou tres linhas exatamente identicas, o importador acrescenta um ordinal deterministico por ocorrencia do mesmo fingerprint. O conjunto de chaves gerado permanece estavel mesmo que as linhas do arquivo sejam reordenadas.
 
 ## Resolucao futura de staging
 

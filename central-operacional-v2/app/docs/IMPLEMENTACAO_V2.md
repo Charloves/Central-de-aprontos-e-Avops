@@ -52,7 +52,7 @@ Quando a origem for migração e não houver evidência confiável do perfil vig
 
 `npm run import:dry-run` executa os importadores locais iniciais para `EFETIVO`, `AVOPS`, `LEITURAS`, `APRONTOS`, `PRESENCAS`, `OI_H50` e `OI_H125` usando fixtures ficticias. A rotina nao acessa a planilha oficial, nao usa Apps Script, nao acessa Google Drive e nao grava no Supabase.
 
-Use `npm run import:dry-run -- --redact` quando o relatorio precisar ser compartilhado sem expor nome, e-mail, justificativas ou textos operacionais de OI. O formato esperado dos arquivos esta documentado em `docs/IMPORTACAO_DRY_RUN.md`.
+Use `npm run import:dry-run -- --redact` quando o relatorio precisar ser compartilhado sem expor nome, e-mail, justificativas, chaves operacionais derivadas de dados pessoais ou textos operacionais de OI. O formato esperado dos arquivos esta documentado em `docs/IMPORTACAO_DRY_RUN.md`.
 
 ## Consulta OI pura
 
@@ -81,3 +81,13 @@ Linhas ambiguas de `PRESENCAS`, como registros sem status, justificativa ou cien
 A identidade do lote usa `source_file_hash`, obrigatorio, calculado futuramente pelo importador como SHA-256 dos bytes exatos do arquivo de origem. A migration usa indice unico com `coalesce(source_reference, '')` para impedir lote duplicado mesmo quando nao houver referencia externa.
 
 A resolucao futura deve ser feita por coordenador/admin: o registro definitivo pode ser criado ou vinculado e, depois disso, o staging recebe `resolved_entity_type`, `resolved_entity_id`, `resolved_by`, `resolved_at` e `resolution_notes`. O JSON original nao deve ser apagado nem alterado. O banco bloqueia update de `original_content` por trigger.
+
+## Logs legados
+
+Os importadores locais tambem aceitam `EMAIL_LOG` e `ACESSOS_LOG` em CSV ou JSON, sem acessar Gmail, Google Sheets ou Supabase.
+
+`EMAIL_LOG` e preparado para futura escrita em `notification_log` quando houver destinatario. O registro preserva `AVOP_ID`, trigrama, tipo original, resultado original, mensagem de erro e observacao em payload/metadados futuros. Linhas de job ou linhas sem destinatario seguem para staging, pois `notification_log.recipient` nao deve receber valor inventado.
+
+`ACESSOS_LOG` e preparado para futura escrita em `audit_log`, mantendo trigrama normalizado apenas como evidencia legada ate que o perfil seja resolvido no banco. Login valido, login negado e acesso administrativo sao classificados somente quando houver evidencia nos campos `MODULO`, `ACAO`, `STATUS` e `DETALHE`.
+
+As idempotency keys dos novos logs usam SHA-256 dos campos normalizados para reduzir exposicao direta de e-mail, trigrama, IP e user-agent. Operacoes de staging tambem usam SHA-256 de conteudo canonico, sem incluir `rowNumber` na identidade. O `rowNumber` fica apenas como metadado de auditoria para localizar a linha original. Quando houver ocorrencias exatamente identicas do mesmo fingerprint, o importador adiciona ordinal deterministico por ocorrencia, preservando todas as linhas sem depender da ordem fisica do arquivo. O modo `--redact` sanitiza payload, original, staging, issues e oculta `idempotencyKey` em relatorios compartilhaveis.

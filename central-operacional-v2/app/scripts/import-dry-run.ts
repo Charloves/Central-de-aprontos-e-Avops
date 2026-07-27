@@ -1,8 +1,10 @@
 import {
   buildImportReport,
+  parseAcessosLog,
   parseAprontos,
   parseAvops,
   parseEfetivo,
+  parseEmailLog,
   parseLeituras,
   parseOiH125,
   parseOiH50,
@@ -18,6 +20,8 @@ type ImportArgs = {
   presencas?: string;
   oiH50?: string;
   oiH125?: string;
+  emailLog?: string;
+  acessosLog?: string;
   redact?: boolean;
 };
 
@@ -59,8 +63,18 @@ if (args.oiH125) {
   sheets.push(parseOiH125(rows));
 }
 
+if (args.emailLog) {
+  const { rows } = readRowsFromFile(args.emailLog);
+  sheets.push(parseEmailLog(rows));
+}
+
+if (args.acessosLog) {
+  const { rows } = readRowsFromFile(args.acessosLog);
+  sheets.push(parseAcessosLog(rows));
+}
+
 if (!sheets.length) {
-  throw new Error('Informe pelo menos um arquivo: --efetivo, --avops, --leituras, --aprontos, --presencas, --oi-h50 ou --oi-h125.');
+  throw new Error('Informe pelo menos um arquivo: --efetivo, --avops, --leituras, --aprontos, --presencas, --oi-h50, --oi-h125, --email-log ou --acessos-log.');
 }
 
 const report = buildImportReport(sheets, new Date().toISOString(), { redact: args.redact });
@@ -89,6 +103,8 @@ function parseArgs(values: string[]): ImportArgs {
     else if (key === '--presencas') out.presencas = value;
     else if (key === '--oi-h50') out.oiH50 = value;
     else if (key === '--oi-h125') out.oiH125 = value;
+    else if (key === '--email-log') out.emailLog = value;
+    else if (key === '--acessos-log') out.acessosLog = value;
     else throw new Error(`Argumento desconhecido: ${key}`);
 
     i += 1;

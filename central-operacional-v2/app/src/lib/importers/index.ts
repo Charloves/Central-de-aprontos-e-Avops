@@ -1,9 +1,21 @@
 export { readRowsFromFile } from './files.ts';
-export { parseAprontos, parseAvops, parseEfetivo, parseLeituras, parseOiH125, parseOiH50, parsePresencas } from './legacy.ts';
+export {
+  parseAcessosLog,
+  parseAprontos,
+  parseAvops,
+  parseEfetivo,
+  parseEmailLog,
+  parseLeituras,
+  parseOiH125,
+  parseOiH50,
+  parsePresencas,
+} from './legacy.ts';
 export { buildImportReport } from './report.ts';
 export type {
+  AccessLogPayload,
   AvopPayload,
   AprontoPayload,
+  EmailLogPayload,
   EfetivoPayload,
   HistoricalStagingPayload,
   ImportIssue,

@@ -36,6 +36,7 @@ function redactSheet(sheet: SheetImportResult<Record<string, unknown>>): SheetIm
     issues: sheet.issues.map((issue) => ({ ...issue, raw: redactRow(issue.raw) })),
     operations: sheet.operations.map((operation) => ({
       ...operation,
+      idempotencyKey: '[REDACTED]',
       payload: redactRow(operation.payload),
       original: redactRow(operation.original),
     })),
@@ -64,8 +65,28 @@ function isSensitiveReportField(key: string): boolean {
   return (
     normalized === 'NOME' ||
     normalized === 'EMAIL' ||
+    normalized === 'ID' ||
+    normalized === 'TRIGRAM' ||
+    normalized === 'TRIGRAMA' ||
+    normalized === 'ORIGINALID' ||
+    normalized === 'ENTITYID' ||
+    normalized === 'RECIPIENT' ||
+    normalized === 'RECIPIENTE' ||
+    normalized === 'DESTINATARIO' ||
+    normalized === 'DESTINATÁRIO' ||
     normalized === 'NAME' ||
     normalized === 'OBS' ||
+    normalized === 'OBSERVATION' ||
+    normalized === 'DETALHE' ||
+    normalized === 'DETAIL' ||
+    normalized === 'MENSAGEM' ||
+    normalized === 'MESSAGE' ||
+    normalized === 'ERROR' ||
+    normalized === 'ERRORMESSAGE' ||
+    normalized === 'IP' ||
+    normalized === 'IP_ADDRESS' ||
+    normalized === 'USER_AGENT' ||
+    normalized === 'USERAGENT' ||
     normalized === 'JUSTIFICATIVA' ||
     normalized === 'JUSTIFICATIONTEXT' ||
     normalized === 'TITULO' ||
