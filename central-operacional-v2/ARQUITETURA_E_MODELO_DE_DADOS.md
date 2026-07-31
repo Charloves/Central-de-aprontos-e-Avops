@@ -250,6 +250,76 @@ As abas legadas `OI_H50` e `OI_H125` mapeiam diretamente para esta tabela. O imp
 - `occurred_at`
 - `metadata`
 
+### `auth_rate_limit_buckets`
+
+- `id`
+- `scope` - TRIGRAM, NETWORK ou COMBINED
+- `trigram_fingerprint`
+- `network_fingerprint`
+- `trigram_key` - coluna gerada nao nula para unicidade
+- `network_key` - coluna gerada nao nula para unicidade
+- `window_started_at`
+- `window_ends_at`
+- `failure_count`
+- `success_count`
+- `last_attempt_at`
+- `created_at`
+- `updated_at`
+
+Tabela server-only para contagem persistente de tentativas de login. Fingerprints devem ser HMAC-SHA256 com segredo server-side; nao armazenar trigrama, IP ou user-agent em claro. A unicidade usa constraints comuns sobre colunas geradas, evitando dependencia de `ON CONFLICT` contra indices de expressao.
+
+### `auth_temporary_blocks`
+
+- `id`
+- `scope`
+- `trigram_fingerprint`
+- `network_fingerprint`
+- `trigram_key`
+- `network_key`
+- `active_marker`
+- `reason`
+- `failed_attempts`
+- `window_started_at`
+- `blocked_until`
+- `lifted_at`
+- `lifted_reason`
+- `created_at`
+- `updated_at`
+
+Controla bloqueios temporarios apos falhas sucessivas. Cada ciclo de bloqueio e uma linha propria. Um bloqueio ativo usa `active_marker = ACTIVE`; ao ser encerrado, o marcador passa para o proprio `id`, preservando historico sem permitir bloqueio ativo duplicado para o mesmo escopo/fingerprint. Quando o bloqueio expira e ainda esta com `lifted_at` nulo, a RPC transacional marca `lifted_at` e `lifted_reason = EXPIRED` antes de inserir um novo ciclo, sem sobrescrever `window_started_at`, `blocked_until` ou `failed_attempts` do ciclo anterior.
+
+### `auth_sessions`
+
+- `id`
+- `profile_id`
+- `session_identifier_hash`
+- `nonce_hash`
+- `issued_at`
+- `expires_at`
+- `last_seen_at`
+- `revoked_at`
+- `revoked_reason`
+- `network_fingerprint`
+- `user_agent_fingerprint`
+- `metadata`
+
+Vincula cookies assinados a estado persistente revogavel. Token e nonce brutos nao sao persistidos. `metadata` permanece restrito a `{}` ate existir allowlist aprovada.
+
+### `auth_audit_events`
+
+- `id`
+- `profile_id`
+- `session_id`
+- `event_type`
+- `result`
+- `trigram_fingerprint`
+- `network_fingerprint`
+- `reason`
+- `occurred_at`
+- `metadata`
+
+Auditoria especifica de autenticacao sem dados pessoais em claro. Complementa `audit_log`, que permanece como auditoria geral do sistema. `metadata` permanece restrito a `{}` para evitar inclusao futura de valores brutos.
+
 ### `backup_index`
 
 - `id`

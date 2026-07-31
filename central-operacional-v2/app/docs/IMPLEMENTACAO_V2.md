@@ -127,6 +127,82 @@ Nao foi criada migration nesta etapa. Persistencia de tentativas repetidas, bloq
 
 Riscos pendentes antes de producao:
 
-- ainda nao existe rate limit persistente ou bloqueio temporario de tentativas repetidas;
-- diferencas temporais entre consulta de perfil inexistente e perfil existente/inativo ainda devem ser mitigadas com controle de tentativa e telemetria;
-- revogacao server-side de sessoes individuais ainda nao existe; a etapa atual revalida perfil e papeis em cada requisicao protegida.
+- a migration de seguranca ainda precisa ser aplicada em ambiente isolado e validada com dados ficticios;
+- diferencas temporais entre consulta de perfil inexistente e perfil existente/inativo devem ser observadas em homologacao com a camada persistente ativa;
+- a rotina operacional de limpeza de sessoes e tentativas expiradas ainda precisa ser agendada.
+
+## Seguranca persistente da autenticacao
+
+`supabase/migrations/0004_auth_security_state.sql` adiciona a camada persistente de seguranca da autenticacao, sem alterar as migrations anteriores.
+
+Tabelas criadas:
+
+- `auth_rate_limit_buckets`: contadores de tentativas por janela.
+- `auth_temporary_blocks`: bloqueios temporarios por escopo.
+- `auth_sessions`: sessoes persistentes ativas, expiradas ou revogadas.
+- `auth_audit_events`: eventos de login, bloqueio, logout e revogacao.
+
+Privacidade:
+
+- trigrama, IP, user-agent, token e nonce nunca devem ser gravados em texto aberto nessas tabelas;
+- fingerprints sao HMAC-SHA256 com `AUTH_FINGERPRINT_SECRET`, separado de `SESSION_SECRET`;
+- token bruto e nonce bruto nunca sao persistidos;
+- `metadata` deve conter apenas contexto operacional nao identificavel.
+
+Funcoes SQL:
+
+- `auth_check_temporary_block`: verificacao preliminar de bloqueio, usada apenas como otimizacao.
+- `auth_finalize_login_failure`: RPC transacional que adquire advisory locks em ordem deterministica, encerra bloqueios expirados, revalida bloqueio ativo, registra a falha e cria bloqueio quando o limite e atingido.
+- `auth_finalize_login_success`: RPC transacional que adquire os mesmos locks, revalida bloqueio ativo, ajusta buckets, cria a sessao persistente e registra auditoria de sucesso na mesma transacao.
+- `auth_touch_session`: valida sessao e limita escrita de `last_seen_at` ao intervalo configurado.
+- `auth_revoke_session`: revoga sessao por HMAC do nonce.
+- `auth_revoke_profile_sessions`: revoga todas as sessoes de um perfil.
+- `auth_record_audit_event`: registra eventos sem identificadores em claro.
+- `auth_cleanup_security_state`: limpa dados expirados conforme retencoes separadas.
+
+As funcoes usam `SECURITY DEFINER` com `search_path` fixo. O acesso e revogado de `PUBLIC`, `anon` e `authenticated`; apenas `service_role` recebe `EXECUTE` nas RPCs indispensaveis. As tabelas ficam com RLS habilitado e sem politicas para o navegador.
+
+Fluxo atualizado:
+
+- antes de consultar perfil, o login calcula fingerprints e faz verificacao preliminar de bloqueio ativo;
+- inexistente, inativo, invalido e bloqueado recebem resposta externa generica;
+- falhas sao finalizadas por RPC transacional, que revalida bloqueio, incrementa contadores por trigrama e, quando houver origem confiavel, por rede e combinacao;
+- a quinta falha e processada, registrada e cria bloqueio temporario; a sexta tentativa dentro da janela e recusada como bloqueada, sem virar nova falha comum;
+- se existir bloqueio expirado ainda nao levantado para os mesmos fingerprints, a RPC marca `lifted_at` e `lifted_reason = EXPIRED` antes de criar novo ciclo;
+- uma linha antiga de bloqueio nunca e sobrescrita para representar outro ciclo; `window_started_at`, `blocked_until` e `failed_attempts` permanecem auditaveis;
+- login valido so emite cookie se a RPC transacional confirmar a criacao da sessao persistente ligada ao nonce por HMAC;
+- rotas protegidas rejeitam sessao inexistente, expirada ou revogada no banco;
+- logout revoga a sessao persistente e remove o cookie.
+
+Origem de rede:
+
+- em desenvolvimento, a origem de rede padrao e fixa: `LOCAL_DEVELOPMENT_NETWORK`;
+- em producao, a aplicacao nao confia automaticamente em cabecalhos como `X-Forwarded-For`;
+- se nao houver provedor confiavel configurado, o escopo de rede pode ser desabilitado e a protecao por trigrama permanece ativa;
+- a integracao com um provedor especifico de hospedagem deve ser documentada antes de aceitar cabecalhos de rede.
+
+Variaveis:
+
+- `AUTH_FINGERPRINT_SECRET`: segredo server-side para HMAC de fingerprints.
+- `LOGIN_MAX_ATTEMPTS`: padrao inicial `5`.
+- `LOGIN_WINDOW_SECONDS`: padrao inicial `900`.
+- `LOGIN_BLOCK_SECONDS`: padrao inicial `900`.
+- `SESSION_TOUCH_INTERVAL_SECONDS`: padrao inicial `300`; limita a frequencia de atualizacao de `last_seen_at`.
+- `AUTH_RATE_LIMIT_TRIGRAM_ENABLED`: habilita escopo por trigrama.
+- `AUTH_RATE_LIMIT_NETWORK_ENABLED`: habilita escopo por rede quando houver origem confiavel.
+
+Retencao inicial da limpeza:
+
+- buckets vencidos: 24 horas apos fim da janela;
+- bloqueios expirados ou levantados: 7 dias apos `lifted_at` ou, se nunca levantados manualmente, apos `blocked_until`;
+- sessoes expiradas ou revogadas: 30 dias;
+- auditoria: 365 dias.
+
+`metadata` das tabelas de seguranca fica restrito a `{}` ate que exista uma allowlist aprovada. Nao gravar trigrama, IP, user-agent, token, nonce ou valores brutos em metadata.
+
+Riscos ainda pendentes antes de producao:
+
+- definir o provedor confiavel de origem de rede do ambiente de hospedagem;
+- criar rotina agendada para `auth_cleanup_security_state`;
+- definir politica operacional de rotacao de `AUTH_FINGERPRINT_SECRET`;
+- avaliar protecao adicional contra negacao de servico direcionada a um trigrama especifico.

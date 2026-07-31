@@ -26,6 +26,14 @@ export function createSessionToken(input: {
   secret: string;
   durationSeconds: number;
 }): string {
+  return createSessionTokenWithPayload(input).token;
+}
+
+export function createSessionTokenWithPayload(input: {
+  trigram: string;
+  secret: string;
+  durationSeconds: number;
+}): { token: string; payload: SessionPayload } {
   assertStrongSessionSecret(input.secret);
   if (!Number.isSafeInteger(input.durationSeconds) || input.durationSeconds <= 0) {
     throw new Error('SESSION_DURATION_SECONDS deve ser um inteiro positivo.');
@@ -36,7 +44,7 @@ export function createSessionToken(input: {
     nonce: randomUUID(),
   };
   const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
-  return `${encoded}.${sign(encoded, input.secret)}`;
+  return { token: `${encoded}.${sign(encoded, input.secret)}`, payload };
 }
 
 export function verifySessionToken(token: string, secret: string): SessionPayload | null {

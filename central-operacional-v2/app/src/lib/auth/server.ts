@@ -2,6 +2,7 @@ import 'server-only';
 import { unstable_noStore as noStore } from 'next/cache';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { SupabaseAuthSecurityRepository } from './supabase-security-repository';
 import { SupabaseProfileRepository } from './supabase-profile-repository';
 import { buildAuthenticatedSession, type AuthenticatedSession } from './authorization';
 import {
@@ -10,12 +11,17 @@ import {
   hasAdminRole,
   verifySessionToken,
 } from './session';
+import { getSessionHashes, loadAuthSecurityConfig, type AuthSecurityRepository } from './security';
 import type { ProfileRepository } from './profiles';
 
-export async function readSession(repository: ProfileRepository = new SupabaseProfileRepository()): Promise<AuthenticatedSession | null> {
+export async function readSession(
+  repository: ProfileRepository = new SupabaseProfileRepository(),
+  securityRepository: AuthSecurityRepository = new SupabaseAuthSecurityRepository(),
+): Promise<AuthenticatedSession | null> {
   noStore();
   const secret = process.env.SESSION_SECRET;
   assertStrongSessionSecret(secret);
+  const securityConfig = loadAuthSecurityConfig();
 
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -24,10 +30,21 @@ export async function readSession(repository: ProfileRepository = new SupabasePr
   const session = verifySessionToken(token, secret);
   if (!session) return null;
 
-  const profile = await repository.findByTrigram(session.trigram);
-  if (!profile?.active) return null;
+  try {
+    const { nonceHash } = getSessionHashes(session, securityConfig.fingerprintSecret);
+    const persistentSession = await securityRepository.touchSession({
+      nonceHash,
+      touchIntervalSeconds: securityConfig.sessionTouchIntervalSeconds,
+    });
+    if (!persistentSession) return null;
 
-  return buildAuthenticatedSession(session, profile);
+    const profile = await repository.findByTrigram(session.trigram);
+    if (!profile?.active || profile.id !== persistentSession.profileId) return null;
+
+    return buildAuthenticatedSession(session, profile);
+  } catch {
+    return null;
+  }
 }
 
 export async function requireSession(): Promise<AuthenticatedSession> {

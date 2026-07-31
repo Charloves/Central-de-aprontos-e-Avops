@@ -11,7 +11,14 @@ export type ProfileRepository = {
 export type LoginAuditContract = {
   action: 'LOGIN';
   status: 'OK' | 'NEGADO';
-  reason: 'VALID' | 'INVALID_CREDENTIALS' | 'INVALID_FORMAT' | 'INACTIVE' | 'CONFIG_ERROR';
+  reason:
+    | 'VALID'
+    | 'INVALID_CREDENTIALS'
+    | 'INVALID_FORMAT'
+    | 'INACTIVE'
+    | 'BLOCKED'
+    | 'SECURITY_ERROR'
+    | 'CONFIG_ERROR';
   trigramHash: string | null;
   occurredAt: string;
 };

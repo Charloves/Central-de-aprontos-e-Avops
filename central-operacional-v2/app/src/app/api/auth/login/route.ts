@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { validateMutableRequest } from '@/lib/auth/csrf';
 import { authenticateTrigram } from '@/lib/auth/login';
+import {
+  buildAuthSecurityContext,
+  loadAuthSecurityConfig,
+  resolveTrustedNetworkOrigin,
+} from '@/lib/auth/security';
+import { SupabaseAuthSecurityRepository } from '@/lib/auth/supabase-security-repository';
 import { SupabaseProfileRepository } from '@/lib/auth/supabase-profile-repository';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 
@@ -16,9 +22,24 @@ export async function POST(request: Request) {
   if (!csrf.ok) return mutationFailure(csrf.status);
 
   const form = await request.formData();
+  const securityConfig = safeLoadSecurityConfig();
+  if (!securityConfig) return mutationFailure(403);
+  const rawTrigram = form.get('trigram');
+  const securityContext = buildAuthSecurityContext({
+    trigram: typeof rawTrigram === 'string' ? rawTrigram : '',
+    networkOrigin: resolveTrustedNetworkOrigin({
+      request,
+      environment: process.env.NODE_ENV,
+    }),
+    userAgent: request.headers.get('user-agent'),
+    config: securityConfig,
+  });
   const result = await authenticateTrigram({
-    rawTrigram: form.get('trigram'),
+    rawTrigram,
     repository: new SupabaseProfileRepository(),
+    securityRepository: new SupabaseAuthSecurityRepository(),
+    securityConfig,
+    securityContext,
     secret: process.env.SESSION_SECRET,
     environment: process.env.NODE_ENV,
   });
@@ -41,4 +62,12 @@ function mutationFailure(status: 403) {
   const response = NextResponse.json({ error: 'Nao foi possivel processar a requisicao.' }, { status });
   response.headers.set('Cache-Control', 'no-store');
   return response;
+}
+
+function safeLoadSecurityConfig(): ReturnType<typeof loadAuthSecurityConfig> | null {
+  try {
+    return loadAuthSecurityConfig();
+  } catch {
+    return null;
+  }
 }

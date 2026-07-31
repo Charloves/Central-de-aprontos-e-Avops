@@ -1,13 +1,13 @@
-import { createHash } from 'node:crypto';
 import { normalizeTrigram } from '@/lib/domain/normalization';
 import {
   buildSessionCookieOptions,
-  createSessionToken,
+  createSessionTokenWithPayload,
   getSessionDurationSeconds,
   validateSessionSecret,
   type SessionCookieOptions,
 } from './session';
 import type { LoginAuditContract, ProfileRepository } from './profiles';
+import { getSessionHashes, type AuthSecurityConfig, type AuthSecurityContext, type AuthSecurityRepository } from './security';
 
 export const GENERIC_LOGIN_FAILURE = 'Nao foi possivel iniciar a sessao. Confira o trigrama e tente novamente.';
 
@@ -30,6 +30,9 @@ export async function authenticateTrigram(input: {
   rawTrigram: unknown;
   repository: ProfileRepository;
   secret: string | undefined;
+  securityRepository?: AuthSecurityRepository;
+  securityConfig?: AuthSecurityConfig;
+  securityContext?: AuthSecurityContext;
   durationSeconds?: number;
   environment?: string;
   now?: Date;
@@ -39,6 +42,24 @@ export async function authenticateTrigram(input: {
   const secret = validateSessionSecret(input.secret);
 
   if (!isAllowedTrigramFormat(normalized)) {
+    if (secret.ok && hasSecurity(input)) {
+      try {
+        await input.securityRepository.recordLoginFailure({
+          context: input.securityContext,
+          config: input.securityConfig,
+          reason: 'INVALID_FORMAT',
+          now: input.now,
+        });
+      } catch {
+        return {
+          ok: false,
+          message: GENERIC_LOGIN_FAILURE,
+          status: 401,
+          audit: buildAudit('NEGADO', 'SECURITY_ERROR', null, occurredAt),
+        };
+      }
+      return failure(401, 'INVALID_FORMAT', null, occurredAt);
+    }
     return failure(400, 'INVALID_FORMAT', normalized || null, occurredAt);
   }
 
@@ -51,26 +72,76 @@ export async function authenticateTrigram(input: {
     };
   }
 
-  const profile = await input.repository.findByTrigram(normalized);
-  if (!profile || !profile.active) {
-    return failure(401, profile ? 'INACTIVE' : 'INVALID_CREDENTIALS', normalized, occurredAt);
-  }
+  try {
+    if (hasSecurity(input)) {
+      const block = await input.securityRepository.checkTemporaryBlock({
+        context: input.securityContext,
+        config: input.securityConfig,
+        now: input.now,
+      });
+      if (block.blocked) {
+        await input.securityRepository.recordAuditEvent({
+          eventType: 'LOGIN_BLOCKED',
+          result: 'NEGADO',
+          context: input.securityContext,
+          reason: 'TEMPORARY_BLOCK',
+          now: input.now,
+        });
+        return failure(401, 'BLOCKED', normalized, occurredAt);
+      }
+    }
 
-  const durationSeconds = input.durationSeconds ?? getSessionDurationSeconds();
-  return {
-    ok: true,
-    token: createSessionToken({
+    const profile = await input.repository.findByTrigram(normalized);
+    if (!profile || !profile.active) {
+      if (hasSecurity(input)) {
+        await input.securityRepository.recordLoginFailure({
+          context: input.securityContext,
+          config: input.securityConfig,
+          reason: profile ? 'INACTIVE' : 'INVALID_CREDENTIALS',
+          now: input.now,
+        });
+      }
+      return failure(401, profile ? 'INACTIVE' : 'INVALID_CREDENTIALS', normalized, occurredAt);
+    }
+
+    const durationSeconds = input.durationSeconds ?? getSessionDurationSeconds();
+    const session = createSessionTokenWithPayload({
       trigram: profile.trigram,
       secret: secret.secret,
       durationSeconds,
-    }),
-    cookie: buildSessionCookieOptions({
-      durationSeconds,
-      environment: input.environment ?? process.env.NODE_ENV,
-    }),
-    redirectTo: '/portal',
-    audit: buildAudit('OK', 'VALID', normalized, occurredAt),
-  };
+    });
+
+    if (hasSecurity(input)) {
+      const hashes = getSessionHashes(session.payload, input.securityConfig.fingerprintSecret);
+      await input.securityRepository.recordLoginSuccess({
+        context: input.securityContext,
+        config: input.securityConfig,
+        profile,
+        session: session.payload,
+        sessionIdentifierHash: hashes.sessionIdentifierHash,
+        nonceHash: hashes.nonceHash,
+        now: input.now,
+      });
+    }
+
+    return {
+      ok: true,
+      token: session.token,
+      cookie: buildSessionCookieOptions({
+        durationSeconds,
+        environment: input.environment ?? process.env.NODE_ENV,
+      }),
+      redirectTo: '/portal',
+      audit: buildAudit('OK', 'VALID', normalized, occurredAt),
+    };
+  } catch {
+    return {
+      ok: false,
+      message: GENERIC_LOGIN_FAILURE,
+      status: 401,
+      audit: buildAudit('NEGADO', 'SECURITY_ERROR', normalized, occurredAt),
+    };
+  }
 }
 
 export function isAllowedTrigramFormat(trigram: string): boolean {
@@ -94,14 +165,26 @@ function failure(
 function buildAudit(
   status: LoginAuditContract['status'],
   reason: LoginAuditContract['reason'],
-  trigram: string | null,
+  _trigram: string | null,
   occurredAt: string,
 ): LoginAuditContract {
   return {
     action: 'LOGIN',
     status,
     reason,
-    trigramHash: trigram ? createHash('sha256').update(trigram).digest('hex') : null,
+    trigramHash: null,
     occurredAt,
   };
+}
+
+function hasSecurity(input: {
+  securityRepository?: AuthSecurityRepository;
+  securityConfig?: AuthSecurityConfig;
+  securityContext?: AuthSecurityContext;
+}): input is {
+  securityRepository: AuthSecurityRepository;
+  securityConfig: AuthSecurityConfig;
+  securityContext: AuthSecurityContext;
+} {
+  return Boolean(input.securityRepository && input.securityConfig && input.securityContext);
 }

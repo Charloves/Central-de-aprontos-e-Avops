@@ -10,6 +10,7 @@ describe('server-only boundaries', () => {
   it.each([
     join(srcDir, 'lib', 'db', 'client.ts'),
     join(testDir, 'server.ts'),
+    join(testDir, 'supabase-security-repository.ts'),
     join(testDir, 'supabase-profile-repository.ts'),
   ])('marca modulo sensivel como server-only: %s', (filePath) => {
     expect(readFileSync(filePath, 'utf8').startsWith("import 'server-only';")).toBe(true);

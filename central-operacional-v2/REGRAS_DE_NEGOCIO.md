@@ -7,6 +7,15 @@
 - Não enviar a relação de trigramas ao cliente.
 - Criar sessão assinada após validação.
 - Registrar início e fim da sessão.
+- Aplicar rate limit persistente antes da consulta do perfil.
+- Tratar a verificacao inicial de bloqueio como otimizacao; a decisao final deve ocorrer na RPC transacional.
+- Processar a quinta falha como tentativa valida que cria bloqueio; recusar a sexta como bloqueada.
+- Encerrar bloqueio expirado com `lifted_at` e motivo `EXPIRED` antes de criar novo ciclo para os mesmos fingerprints.
+- Nunca sobrescrever uma linha antiga de bloqueio para representar novo ciclo; cada ciclo deve gerar uma nova linha auditavel.
+- Responder de forma externa generica para trigrama inexistente, inativo, invalido ou bloqueado.
+- Nao armazenar trigrama, IP, user-agent, token ou nonce em claro nas tabelas de seguranca.
+- Revogar a sessao persistente no logout e rejeitar imediatamente sessao revogada.
+- Atualizar `last_seen_at` no maximo uma vez por intervalo configurado, para evitar escrita em toda requisicao.
 
 ## 2. Conteúdo aplicável
 
