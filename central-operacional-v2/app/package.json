@@ -11,7 +11,12 @@
     "typecheck": "tsc --noEmit",
     "import:dry-run": "node --experimental-strip-types scripts/import-dry-run.ts --efetivo fixtures/import/efetivo.csv --avops fixtures/import/avops.csv --leituras fixtures/import/leituras.csv --aprontos fixtures/import/aprontos.csv --presencas fixtures/import/presencas.csv --oi-h50 fixtures/import/oi_h50.csv --oi-h125 fixtures/import/oi_h125.csv --email-log fixtures/import/email_log.csv --acessos-log fixtures/import/acessos_log.csv",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "supabase:version": "supabase --version",
+    "supabase:migrations:list": "node --experimental-strip-types scripts/supabase-migrations-list.ts",
+    "supabase:db:push:dry-run": "node --experimental-strip-types scripts/safe-supabase-dry-run.ts",
+    "supabase:types:dev": "node --experimental-strip-types scripts/generate-supabase-types.ts",
+    "supabase:validate:dev": "node --experimental-strip-types scripts/validate-supabase-dev.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -29,6 +34,7 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.32.0",
     "eslint-config-next": "15.5.22",
+    "supabase": "2.111.0",
     "typescript": "^5.6.2",
     "vitest": "^2.1.1"
   },

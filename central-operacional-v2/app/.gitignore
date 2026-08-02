@@ -8,3 +8,5 @@ dist/
 .env.homologation.local
 .env.production.local
 *.tsbuildinfo
+supabase/.branches/
+supabase/.temp/
