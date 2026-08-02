@@ -40,6 +40,21 @@ Esta implementação inicial cria a fundação técnica da V2 sem alterar a Cent
 
 Nenhum segredo deve ser commitado. Use somente arquivos `.env.*.local` para credenciais reais.
 
+## Overrides temporários de dependencias do Next
+
+O projeto permanece em `next@15.5.22`.
+
+Foram aplicados overrides temporários e restritos a árvore do Next para:
+
+- `postcss@8.5.25`;
+- `sharp@0.35.3`.
+
+Motivo: corrigir vulnerabilidades de produção apontadas pelo `npm audit` em dependencias transitivas usadas pelo Next, sem alterar a versão do framework nesta etapa.
+
+Com esses overrides, a auditoria de produção (`npm audit --omit=dev --offline=false`) fica zerada.
+
+Obrigação futura: remover esses overrides quando uma versão futura do Next incorporar nativamente versões corrigidas e compativeis de PostCSS e Sharp.
+
 ## Migration 0002
 
 `supabase/migrations/0002_publication_history_snapshots.sql` acrescenta a estrutura de histórico de público/perfil e snapshots nominais de publicação.
