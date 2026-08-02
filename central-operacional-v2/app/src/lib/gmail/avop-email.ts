@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { google } from 'googleapis';
 
 export type AvopEmailItem = {
@@ -31,6 +33,70 @@ export function buildAvopReminderEmail(items: AvopEmailItem[]) {
   return { subject, body };
 }
 
+const HEADER_CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/;
+const SIMPLE_EMAIL_PATTERN = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+
+function rejectUnsafeHeaderValue(value: string) {
+  if (HEADER_CONTROL_CHAR_PATTERN.test(value)) {
+    throw new Error('Falha ao preparar mensagem de e-mail.');
+  }
+}
+
+function formatSimpleEmailAddress(value: string) {
+  rejectUnsafeHeaderValue(value);
+
+  if (
+    value.trim() !== value
+    || value.includes(' ')
+    || value.includes(',')
+    || value.includes(';')
+    || !SIMPLE_EMAIL_PATTERN.test(value)
+  ) {
+    throw new Error('Falha ao preparar mensagem de e-mail.');
+  }
+
+  return value;
+}
+
+function encodeMimeHeaderValue(value: string) {
+  rejectUnsafeHeaderValue(value);
+
+  if (/^[\x20-\x7E]*$/.test(value)) {
+    return value;
+  }
+
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const character of value) {
+    const candidate = current + character;
+    if (current && Buffer.byteLength(candidate, 'utf8') > 45) {
+      chunks.push(current);
+      current = character;
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks
+    .map((chunk) => `=?UTF-8?B?${Buffer.from(chunk, 'utf8').toString('base64')}?=`)
+    .join(' ');
+}
+
+function formatDisplayName(value: string) {
+  rejectUnsafeHeaderValue(value);
+
+  if (/[<>]/.test(value)) {
+    throw new Error('Falha ao preparar mensagem de e-mail.');
+  }
+
+  return encodeMimeHeaderValue(value);
+}
+
 export async function sendGmailMessage(input: {
   to: string;
   subject: string;
@@ -46,21 +112,31 @@ export async function sendGmailMessage(input: {
     throw new Error('Credenciais da Gmail API não configuradas.');
   }
 
+  const safeSenderEmail = formatSimpleEmailAddress(senderEmail);
+  const safeRecipientEmail = formatSimpleEmailAddress(input.to);
+  const safeSenderName = formatDisplayName(senderName);
+  const safeSubject = encodeMimeHeaderValue(input.subject);
+
   const auth = new google.auth.OAuth2(clientId, clientSecret);
   auth.setCredentials({ refresh_token: refreshToken });
   const gmail = google.gmail({ version: 'v1', auth });
 
   const raw = Buffer.from([
-    `From: ${senderName} <${senderEmail}>`,
-    `To: ${input.to}`,
-    `Subject: ${input.subject}`,
+    `From: ${safeSenderName} <${safeSenderEmail}>`,
+    `To: ${safeRecipientEmail}`,
+    `Subject: ${safeSubject}`,
+    'MIME-Version: 1.0',
     'Content-Type: text/plain; charset="UTF-8"',
     '',
     input.body,
   ].join('\r\n')).toString('base64url');
 
-  return gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw },
-  });
+  try {
+    return await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw },
+    });
+  } catch {
+    throw new Error('Falha ao enviar mensagem pela Gmail API.');
+  }
 }
