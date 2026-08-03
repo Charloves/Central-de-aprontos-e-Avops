@@ -12,6 +12,7 @@ type SafeDryRunDependencies = {
   exists: (path: string) => boolean;
   readFile: (path: string) => string;
   supabaseCommand: string;
+  supabaseArgsPrefix: string[];
   spawn: (command: string, args: string[], options: { cwd: string; stdio: 'inherit'; shell: boolean }) => SpawnResult;
   log: (message: string) => void;
   error: (message: string) => void;
@@ -69,10 +70,10 @@ export function runSafeSupabaseDryRun(dependencies: SafeDryRunDependencies): num
 
   dependencies.log(`Supabase target confirmado: env=${targetEnv}; project_ref=${linkedProjectRef}`);
   dependencies.log('Executando comando fixo: supabase db push --dry-run');
-  const result = dependencies.spawn(dependencies.supabaseCommand, ['db', 'push', '--dry-run'], {
+  const result = dependencies.spawn(dependencies.supabaseCommand, [...dependencies.supabaseArgsPrefix, 'db', 'push', '--dry-run'], {
     cwd: dependencies.cwd,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: false,
   });
 
   if (result.error) {
@@ -119,19 +120,21 @@ function resolveAppRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..');
 }
 
-function resolveLocalSupabaseCommand(appRoot: string): string {
-  return resolve(appRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'supabase.cmd' : 'supabase');
+function resolveLocalSupabaseEntrypoint(appRoot: string): string {
+  return resolve(appRoot, 'node_modules', 'supabase', 'dist', 'supabase.js');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const appRoot = resolveAppRoot();
+  const supabaseEntrypoint = resolveLocalSupabaseEntrypoint(appRoot);
   process.exit(runSafeSupabaseDryRun({
     cwd: appRoot,
     env: process.env,
     argv: process.argv,
     exists: existsSync,
     readFile: (path) => readFileSync(path, 'utf8'),
-    supabaseCommand: resolveLocalSupabaseCommand(appRoot),
+    supabaseCommand: process.execPath,
+    supabaseArgsPrefix: [supabaseEntrypoint],
     spawn: (command, args, options) => spawnSync(command, args, options),
     log: console.log,
     error: console.error,
