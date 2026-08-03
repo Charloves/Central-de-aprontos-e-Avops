@@ -12,6 +12,21 @@ Navegador
       -> Cookie de sessão assinado
 ```
 
+## Modelo de acesso ao banco
+
+A V2 atual usa Supabase apenas pelo backend server-side. O navegador nao recebe acesso direto as tabelas, nao recebe lista de trigramas e nao usa `SUPABASE_SERVICE_ROLE_KEY`.
+
+Classificacao inicial das tabelas publicas:
+
+- Backend/service_role exclusivo: `profiles`, `profile_roles`, `audiences`, `profile_audiences`, `avops`, `avop_audiences`, `avop_acknowledgements`, `briefings`, `briefing_audiences`, `briefing_records`, `absence_justifications`, `ois`, `notification_schedule`, `notification_log`, `audit_log`, `backup_index`, `settings`.
+- Historico, auditoria ou staging server-only: `profile_audience_history`, `avop_publication_snapshots`, `avop_publication_snapshot_members`, `briefing_publication_snapshots`, `briefing_publication_snapshot_members`, `historical_import_batches`, `historical_import_staging_records`.
+- Seguranca interna server-only: `auth_rate_limit_buckets`, `auth_temporary_blocks`, `auth_sessions`, `auth_audit_events`.
+- Eventual acesso futuro pelo navegador: nenhum nesta fase.
+
+`0005_security_hardening` habilita RLS em todas as tabelas do schema `public`, remove grants de `PUBLIC`, `anon` e `authenticated`, nao cria policies permissivas e preserva apenas o acesso necessario ao `service_role`. Qualquer acesso direto futuro pelo navegador deve ser modelado em migration propria, com policies especificas, testes de autorizacao e revisao de dados pessoais expostos.
+
+A migration tambem remove `CREATE` no schema `public` para roles de navegador e ajusta default privileges para que novos objetos criados por migrations futuras nao herdem exposicao acidental. Isso e intencionalmente restritivo: o backend continua operando com `service_role`, e o navegador permanece sem rota direta ao banco.
+
 ## Princípio documental
 
 Os arquivos não serão copiados para a aplicação. AVOPs, aprontos e OI permanecem no Google Drive compartilhado. A aplicação armazena apenas metadados e links.

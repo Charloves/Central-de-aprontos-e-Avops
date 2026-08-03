@@ -40,6 +40,24 @@ Esta implementação inicial cria a fundação técnica da V2 sem alterar a Cent
 
 Nenhum segredo deve ser commitado. Use somente arquivos `.env.*.local` para credenciais reais.
 
+## Modelo de acesso ao Supabase
+
+A V2 não usa acesso direto do navegador ao Supabase. O navegador fala com a aplicação Next.js, e as operações de banco passam por rotas, server actions ou módulos server-side.
+
+Consequências práticas:
+
+- `SUPABASE_SERVICE_ROLE_KEY` deve existir apenas no servidor;
+- Client Components não devem importar repositórios ou clientes com service role;
+- `anon` e `authenticated` não recebem grants diretos nas tabelas da V2 nesta fase;
+- todas as tabelas do schema `public` ficam com RLS habilitado;
+- não existem policies permissivas genéricas para navegador;
+- `profiles`, `audit_log`, staging histórico, sessões, registros de ciência, presenças e dados pessoais permanecem server-only;
+- qualquer acesso futuro pelo navegador exigirá decisão explícita de produto, migration própria, RLS nominal e testes de autorização.
+
+`supabase/migrations/0005_security_hardening.sql` consolida esse modelo depois da aplicação de `0001` a `0004`: habilita RLS em todas as tabelas públicas, revoga privilégios de `PUBLIC`, `anon` e `authenticated`, preserva o acesso do backend por `service_role` e corrige o `search_path` da função de imutabilidade do staging histórico.
+
+A mesma migration revoga `CREATE` no schema `public` para `PUBLIC`, `anon` e `authenticated`, e define default privileges para que tabelas, sequences e funções futuras não sejam expostas acidentalmente ao navegador. O impacto esperado é bloquear acesso direto por Data API; qualquer exposição futura deve ocorrer por migration própria com grants, policies e testes específicos.
+
 ## Overrides temporários de dependencias do Next
 
 O projeto permanece em `next@15.5.22`.
