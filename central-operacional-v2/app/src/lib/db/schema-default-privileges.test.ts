@@ -18,32 +18,29 @@ const previousMigrations = [
 ];
 
 describe('public default privileges hardening migration', () => {
-  it('uses explicit owner-scoped default privileges for confirmed object creators', () => {
-    expect(migration).toContain('alter default privileges for role supabase_admin in schema public');
+  it('uses explicit owner-scoped default privileges only for the application migration owner', () => {
     expect(migration).toContain('alter default privileges for role postgres in schema public');
+    expect(migration).not.toContain('alter default privileges for role supabase_admin');
     expect(migration).not.toContain('alter default privileges in schema public');
   });
 
-  it('revokes future browser-role access for tables, sequences and functions owned by supabase_admin', () => {
+  it('revokes future access for browser roles and service_role on tables, sequences and functions', () => {
     expect(migration).toContain(
-      'revoke all privileges on tables from public, anon, authenticated',
+      'revoke all privileges on tables from public, anon, authenticated, service_role',
     );
     expect(migration).toContain(
-      'revoke all privileges on sequences from public, anon, authenticated',
+      'revoke all privileges on sequences from public, anon, authenticated, service_role',
     );
     expect(migration).toContain(
-      'revoke execute on functions from public, anon, authenticated',
+      'revoke execute on functions from public, anon, authenticated, service_role',
     );
   });
 
-  it('preserves future service_role access without granting browser roles', () => {
+  it('requires explicit future service_role grants instead of default access', () => {
+    expect(migration).not.toMatch(/\bgrant\b[\s\S]*\bto\s+(public|anon|authenticated|service_role)\b/i);
     expect(migration).toContain(
-      'grant select, insert, update, delete, truncate, references, trigger on tables to service_role',
+      'Each future migration must\n-- grant service_role explicitly only for the objects the backend needs',
     );
-    expect(migration).toContain('grant usage, select, update on sequences to service_role');
-    expect(migration).toContain('grant execute on functions to service_role');
-
-    expect(migration).not.toMatch(/\bgrant\b[\s\S]*\bto\s+(public|anon|authenticated)\b/i);
   });
 
   it('is limited to the public schema and does not touch policies, indexes or Supabase internal schemas', () => {

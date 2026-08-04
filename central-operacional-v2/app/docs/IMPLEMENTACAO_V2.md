@@ -58,9 +58,15 @@ Consequências práticas:
 
 `0005` também revoga `CREATE` no schema `public` para `PUBLIC`, `anon` e `authenticated`. Essa proteção atua sobre o schema e sobre os objetos existentes, mas não basta para objetos futuros quando os default privileges pertencem a outro papel criador.
 
-Default privileges no PostgreSQL são específicos por papel definidor. Após aplicar `0001` a `0005` no Supabase de desenvolvimento, a auditoria de `pg_default_acl` mostrou que os objetos atuais foram criados por `postgres`, enquanto os defaults herdados que ainda concediam acesso futuro a `anon` e `authenticated` pertenciam a `supabase_admin`.
+Default privileges no PostgreSQL são específicos por papel definidor. Após aplicar `0001` a `0005` no Supabase de desenvolvimento, a auditoria de `pg_default_acl` mostrou que os objetos atuais da V2 foram criados por `postgres`, enquanto defaults herdados da plataforma pertencem a `supabase_admin`.
 
-`supabase/migrations/0006_protect_public_default_privileges.sql` trata exclusivamente esse segundo nível: revoga de `PUBLIC`, `anon` e `authenticated` os privilégios futuros em tabelas, sequences e funções criadas por `supabase_admin` no schema `public`, preservando os defaults necessários ao `service_role`. Para `postgres`, a migration apenas reafirma os grants futuros para `service_role`, pois a inspeção não encontrou defaults de navegador para esse owner.
+`supabase_admin` é um papel interno gerenciado pelo Supabase. O executor das migrations da aplicação não consegue alterar seus default privileges e não deve tentar `SET ROLE`, grant de papel interno, migration repair ou alteração administrativa desse owner.
+
+`supabase/migrations/0006_protect_public_default_privileges.sql` trata exclusivamente o que é aplicável pela aplicação: default privileges futuros do owner `postgres` no schema `public`. O modelo é fail-closed: objetos futuros criados por migrations da aplicação não recebem grants automáticos para `PUBLIC`, `anon`, `authenticated` nem `service_role`.
+
+Cada migration futura que criar tabela, sequence ou função deve conceder explicitamente ao `service_role` apenas os privilégios necessários para o backend server-side. Grants para navegador continuam proibidos por padrão e exigem decisão específica de produto, RLS nominal e testes de autorização.
+
+Risco residual: defaults observados para `supabase_admin` permanecem como estado gerenciado da plataforma e devem ser monitorados pelos advisors. Como os objetos da V2 são criados por `postgres`, a proteção efetiva da aplicação fica concentrada no owner usado pelas migrations.
 
 Qualquer exposição futura ao navegador deve ocorrer por migration própria com grants, policies e testes específicos.
 
