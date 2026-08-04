@@ -22,7 +22,7 @@ export class SupabaseProfileRepository implements ProfileRepository {
 
     const { data, error } = await this.client
       .from('profiles')
-      .select('id,trigram,name,active,profile_roles(role)')
+      .select('id,trigram,name,active,profile_roles!profile_roles_profile_id_fkey(role)')
       .eq('trigram', normalized)
       .maybeSingle<ProfileRow>();
 

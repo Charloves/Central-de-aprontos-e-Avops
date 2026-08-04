@@ -42,6 +42,16 @@ Nenhum segredo deve ser commitado. Use somente arquivos `.env.*.local` para cred
 
 `SUPABASE_SECRET_KEY` é a chave secreta moderna da Supabase, no formato `sb_secret_...`, e é exclusiva do backend server-side. Ela não pode ser exposta como `NEXT_PUBLIC_*`, não pode ser registrada em logs, não deve aparecer em respostas HTTP e nunca deve ser versionada. Cada ambiente deve usar uma chave própria.
 
+## Correção do primeiro fluxo funcional de autenticação
+
+O primeiro teste funcional local identificou três ajustes necessários no caminho entre a interface Next.js e as RPCs persistentes de autenticação:
+
+- A consulta de `profiles` com `profile_roles(role)` era ambígua no PostgREST porque `profile_roles` possui dois vínculos com `profiles`: `profile_id` e `assigned_by`. A V2 passou a usar a relação explícita `profile_roles!profile_roles_profile_id_fkey(role)` para carregar apenas os papéis do perfil autenticado.
+- As chamadas server-side às RPCs de autenticação passaram a enviar `p_now` explicitamente. Isso evita que `undefined` chegue ao Supabase como parâmetro nulo e impede falhas em campos `timestamptz not null` que deveriam receber o horário corrente.
+- A função `auth_finalize_login_failure`, criada na `0004`, preservava corretamente buckets, bloqueios e auditoria, mas o `CASE` usado para escolher entre `LOGIN_FAILURE` e `LOGIN_BLOCKED` era resolvido como `text` pelo PostgreSQL. A função `auth_record_audit_event` exige `auth_audit_event_type`, então a chamada falhava e a transação de falha era revertida. A migration `0008_fix_login_failure_audit_event_type.sql` substitui somente essa função e converte o `CASE` para `public.auth_audit_event_type`.
+
+A migration `0008` não altera tabelas, dados, RLS, policies, índices, enums ou constraints. Ela preserva `SECURITY DEFINER`, `search_path = public, pg_temp`, locks transacionais, regra da quinta tentativa, bloqueio da sexta tentativa e grants mínimos para execução exclusiva pelo `service_role`.
+
 ## Modelo de acesso ao Supabase
 
 A V2 não usa acesso direto do navegador ao Supabase. O navegador fala com a aplicação Next.js, e as operações de banco passam por rotas, server actions ou módulos server-side.

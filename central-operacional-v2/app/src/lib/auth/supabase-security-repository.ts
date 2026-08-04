@@ -20,7 +20,7 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
       p_network_fingerprint: input.context.networkFingerprint,
       p_enable_trigram: input.config.enableTrigramScope,
       p_enable_network: effectiveNetworkScopeEnabled(input.config, input.context.networkFingerprint),
-      p_now: input.now?.toISOString(),
+      p_now: resolveNow(input.now),
     });
     if (error) throw error;
     const row = firstRow<{ blocked: boolean; blocked_until: string | null; scope: BlockCheckResult['scope'] }>(data);
@@ -41,7 +41,7 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
       p_block_seconds: input.config.blockSeconds,
       p_enable_trigram: input.config.enableTrigramScope,
       p_enable_network: effectiveNetworkScopeEnabled(input.config, input.context.networkFingerprint),
-      p_now: input.now?.toISOString(),
+      p_now: resolveNow(input.now),
     });
     if (error) throw error;
     const row = firstRow<{ blocked: boolean; blocked_until: string | null }>(data);
@@ -62,7 +62,7 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
       p_expires_at: new Date(input.session.exp).toISOString(),
       p_enable_trigram: input.config.enableTrigramScope,
       p_enable_network: effectiveNetworkScopeEnabled(input.config, input.context.networkFingerprint),
-      p_now: input.now?.toISOString(),
+      p_now: resolveNow(input.now),
     });
     if (error) throw error;
     const row = firstRow<{ session_id: string | null; blocked: boolean; blocked_until: string | null }>(data);
@@ -75,7 +75,7 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
     const { data, error } = await this.client.rpc('auth_touch_session', {
       p_nonce_hash: input.nonceHash,
       p_touch_interval_seconds: input.touchIntervalSeconds,
-      p_now: input.now?.toISOString(),
+      p_now: resolveNow(input.now),
     });
     if (error) throw error;
     const row = firstRow<{ session_id: string; profile_id: string; expires_at: string; revoked_at: string | null }>(data);
@@ -92,7 +92,7 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
     const { data, error } = await this.client.rpc('auth_revoke_session', {
       p_nonce_hash: input.nonceHash,
       p_reason: input.reason,
-      p_now: input.now?.toISOString(),
+      p_now: resolveNow(input.now),
     });
     if (error) throw error;
     return { sessionId: data ? String(data) : null };
@@ -102,7 +102,7 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
     const { data, error } = await this.client.rpc('auth_revoke_profile_sessions', {
       p_profile_id: input.profileId,
       p_reason: input.reason,
-      p_now: input.now?.toISOString(),
+      p_now: resolveNow(input.now),
     });
     if (error) throw error;
     return { revokedCount: Number(data ?? 0) };
@@ -118,7 +118,7 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
       p_network_fingerprint: input.context?.networkFingerprint ?? null,
       p_reason: input.reason ?? null,
       p_metadata: input.metadata ?? {},
-      p_now: input.now?.toISOString(),
+      p_now: resolveNow(input.now),
     });
     if (error) throw error;
   }
@@ -127,4 +127,8 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
 function firstRow<T>(data: RpcSingle<T>): T | null {
   if (Array.isArray(data)) return data[0] ?? null;
   return data;
+}
+
+function resolveNow(now: Date | undefined): string {
+  return (now ?? new Date()).toISOString();
 }
