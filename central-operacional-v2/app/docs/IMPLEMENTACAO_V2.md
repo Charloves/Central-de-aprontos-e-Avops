@@ -56,7 +56,13 @@ Consequências práticas:
 
 `supabase/migrations/0005_security_hardening.sql` consolida esse modelo depois da aplicação de `0001` a `0004`: habilita RLS em todas as tabelas públicas, revoga privilégios de `PUBLIC`, `anon` e `authenticated`, preserva o acesso do backend por `service_role` e corrige o `search_path` da função de imutabilidade do staging histórico.
 
-A mesma migration revoga `CREATE` no schema `public` para `PUBLIC`, `anon` e `authenticated`, e define default privileges para que tabelas, sequences e funções futuras não sejam expostas acidentalmente ao navegador. O impacto esperado é bloquear acesso direto por Data API; qualquer exposição futura deve ocorrer por migration própria com grants, policies e testes específicos.
+`0005` também revoga `CREATE` no schema `public` para `PUBLIC`, `anon` e `authenticated`. Essa proteção atua sobre o schema e sobre os objetos existentes, mas não basta para objetos futuros quando os default privileges pertencem a outro papel criador.
+
+Default privileges no PostgreSQL são específicos por papel definidor. Após aplicar `0001` a `0005` no Supabase de desenvolvimento, a auditoria de `pg_default_acl` mostrou que os objetos atuais foram criados por `postgres`, enquanto os defaults herdados que ainda concediam acesso futuro a `anon` e `authenticated` pertenciam a `supabase_admin`.
+
+`supabase/migrations/0006_protect_public_default_privileges.sql` trata exclusivamente esse segundo nível: revoga de `PUBLIC`, `anon` e `authenticated` os privilégios futuros em tabelas, sequences e funções criadas por `supabase_admin` no schema `public`, preservando os defaults necessários ao `service_role`. Para `postgres`, a migration apenas reafirma os grants futuros para `service_role`, pois a inspeção não encontrou defaults de navegador para esse owner.
+
+Qualquer exposição futura ao navegador deve ocorrer por migration própria com grants, policies e testes específicos.
 
 ## Overrides temporários de dependencias do Next
 
