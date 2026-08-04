@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   buildSessionCookieOptions,
   buildLogoutCookieOptions,
@@ -11,40 +11,35 @@ import {
 const STRONG_SECRET = '0123456789abcdef0123456789abcdef';
 
 describe('session', () => {
-  it('cria e valida sessao assinada', () => {
+  it('cria e valida token de sessao opaco', () => {
     const token = createSessionToken({
-      trigram: 'cha',
       secret: STRONG_SECRET,
       durationSeconds: 3600,
     });
 
-    expect(verifySessionToken(token, STRONG_SECRET)).toMatchObject({
-      trigram: 'CHA',
-    });
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43,128}$/);
+    expect(token).not.toContain('CHA');
+    expect(token).not.toContain('cha');
+    expect(token).not.toContain('.');
+    expect(verifySessionToken(token, STRONG_SECRET)).toEqual({ sessionIdentifier: token });
   });
 
-  it('rejeita sessao adulterada', () => {
+  it('gera tokens aleatorios e nao reutilizados', () => {
+    const first = createSessionToken({ secret: STRONG_SECRET, durationSeconds: 3600 });
+    const second = createSessionToken({ secret: STRONG_SECRET, durationSeconds: 3600 });
+
+    expect(first).not.toBe(second);
+  });
+
+  it('rejeita sessao adulterada ou malformada', () => {
     const token = createSessionToken({
-      trigram: 'CHA',
       secret: STRONG_SECRET,
       durationSeconds: 3600,
     });
 
-    expect(verifySessionToken(`${token}x`, STRONG_SECRET)).toBeNull();
-  });
-
-  it('rejeita sessao expirada', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-05-06T10:00:00.000Z'));
-    const token = createSessionToken({
-      trigram: 'CHA',
-      secret: STRONG_SECRET,
-      durationSeconds: 1,
-    });
-
-    vi.setSystemTime(new Date('2026-05-06T10:00:02.000Z'));
-    expect(verifySessionToken(token, STRONG_SECRET)).toBeNull();
-    vi.useRealTimers();
+    expect(verifySessionToken(`${token}=`, STRONG_SECRET)).toBeNull();
+    expect(verifySessionToken('CHA', STRONG_SECRET)).toBeNull();
+    expect(verifySessionToken('header.payload.signature', STRONG_SECRET)).toBeNull();
   });
 
   it('exige segredo presente e forte', () => {

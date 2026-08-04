@@ -78,17 +78,15 @@ describe('auth security primitives', () => {
     expect(resolveTrustedNetworkOrigin({ request, environment: 'production' })).toBeNull();
   });
 
-  it('gera hashes de sessao sem persistir nonce bruto', () => {
+  it('gera hashes de sessao sem persistir identificador bruto', () => {
     const session: SessionPayload = {
-      trigram: 'ABC',
-      exp: Date.now() + 60_000,
-      nonce: 'nonce-ficticio',
+      sessionIdentifier: 'opaque-session-token-for-user-000000000001',
     };
 
     const hashes = getSessionHashes(session, AUTH_SECRET);
     expect(hashes.sessionIdentifierHash).toMatch(/^[a-f0-9]{64}$/);
     expect(hashes.nonceHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(Object.values(hashes).join(' ')).not.toContain(session.nonce);
+    expect(Object.values(hashes).join(' ')).not.toContain(session.sessionIdentifier);
   });
 
   it('bloqueia apos cinco falhas e libera janela expirada naturalmente', async () => {
@@ -241,9 +239,7 @@ describe('auth security primitives', () => {
     await failFiveTimes(repository, context, now);
 
     const session: SessionPayload = {
-      trigram: 'ABC',
-      exp: Date.now() + 60_000,
-      nonce: 'blocked-success',
+      sessionIdentifier: 'opaque-session-token-for-blocked-success001',
     };
     const hashes = getSessionHashes(session, config.fingerprintSecret);
 
@@ -251,13 +247,13 @@ describe('auth security primitives', () => {
       context,
       config,
       profile: { id: 'profile-user', trigram: 'ABC', name: 'Usuario Ficticio', active: true, roles: ['USER'] },
-      session,
+      sessionExpiresAt: new Date(Date.now() + 60_000).toISOString(),
       sessionIdentifierHash: hashes.sessionIdentifierHash,
       nonceHash: hashes.nonceHash,
       now,
     })).rejects.toThrow();
     await expect(repository.touchSession({
-      nonceHash: hashes.nonceHash,
+      sessionIdentifierHash: hashes.sessionIdentifierHash,
       touchIntervalSeconds: config.sessionTouchIntervalSeconds,
       now,
     })).resolves.toBeNull();
@@ -272,9 +268,7 @@ describe('auth security primitives', () => {
       config,
     });
     const session: SessionPayload = {
-      trigram: 'ABC',
-      exp: Date.parse('2026-05-06T11:00:00.000Z'),
-      nonce: 'touch-interval',
+      sessionIdentifier: 'opaque-session-token-for-touch-interval001',
     };
     const hashes = getSessionHashes(session, config.fingerprintSecret);
 
@@ -282,29 +276,29 @@ describe('auth security primitives', () => {
       context,
       config,
       profile: { id: 'profile-user', trigram: 'ABC', name: 'Usuario Ficticio', active: true, roles: ['USER'] },
-      session,
+      sessionExpiresAt: '2026-05-06T11:00:00.000Z',
       sessionIdentifierHash: hashes.sessionIdentifierHash,
       nonceHash: hashes.nonceHash,
       now: new Date('2026-05-06T10:00:00.000Z'),
     });
 
     await repository.touchSession({
-      nonceHash: hashes.nonceHash,
+      sessionIdentifierHash: hashes.sessionIdentifierHash,
       touchIntervalSeconds: config.sessionTouchIntervalSeconds,
       now: new Date('2026-05-06T10:00:00.000Z'),
     });
-    const firstSeen = repository.getLastSeenForTest(hashes.nonceHash);
+    const firstSeen = repository.getLastSeenForTest(hashes.sessionIdentifierHash);
     await repository.touchSession({
-      nonceHash: hashes.nonceHash,
+      sessionIdentifierHash: hashes.sessionIdentifierHash,
       touchIntervalSeconds: config.sessionTouchIntervalSeconds,
       now: new Date('2026-05-06T10:01:00.000Z'),
     });
-    expect(repository.getLastSeenForTest(hashes.nonceHash)).toBe(firstSeen);
+    expect(repository.getLastSeenForTest(hashes.sessionIdentifierHash)).toBe(firstSeen);
     await repository.touchSession({
-      nonceHash: hashes.nonceHash,
+      sessionIdentifierHash: hashes.sessionIdentifierHash,
       touchIntervalSeconds: config.sessionTouchIntervalSeconds,
       now: new Date('2026-05-06T10:06:00.000Z'),
     });
-    expect(repository.getLastSeenForTest(hashes.nonceHash)).toBe('2026-05-06T10:06:00.000Z');
+    expect(repository.getLastSeenForTest(hashes.sessionIdentifierHash)).toBe('2026-05-06T10:06:00.000Z');
   });
 });

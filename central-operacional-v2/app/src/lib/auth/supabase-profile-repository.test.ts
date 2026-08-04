@@ -29,4 +29,26 @@ describe('SupabaseProfileRepository', () => {
     expect(eq).toHaveBeenCalledWith('trigram', 'CHA');
     expect(profile?.roles).toEqual(expect.arrayContaining(['USER', 'ADMIN']));
   });
+
+  it('carrega perfil por id para revalidar sessoes persistentes', async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: 'profile-id',
+        trigram: 'CHA',
+        name: 'Usuario Ficticio',
+        active: true,
+        profile_roles: [{ role: 'COORDINATOR' }],
+      },
+      error: null,
+    });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    const select = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ select });
+
+    const repository = new SupabaseProfileRepository({ from } as never);
+    const profile = await repository.findById('profile-id');
+
+    expect(eq).toHaveBeenCalledWith('id', 'profile-id');
+    expect(profile?.roles).toEqual(expect.arrayContaining(['USER', 'COORDINATOR']));
+  });
 });

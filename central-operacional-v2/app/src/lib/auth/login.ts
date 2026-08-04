@@ -106,7 +106,6 @@ export async function authenticateTrigram(input: {
 
     const durationSeconds = input.durationSeconds ?? getSessionDurationSeconds();
     const session = createSessionTokenWithPayload({
-      trigram: profile.trigram,
       secret: secret.secret,
       durationSeconds,
     });
@@ -117,7 +116,7 @@ export async function authenticateTrigram(input: {
         context: input.securityContext,
         config: input.securityConfig,
         profile,
-        session: session.payload,
+        sessionExpiresAt: session.expiresAt,
         sessionIdentifierHash: hashes.sessionIdentifierHash,
         nonceHash: hashes.nonceHash,
         now: input.now,

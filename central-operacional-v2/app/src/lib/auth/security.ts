@@ -67,18 +67,18 @@ export type AuthSecurityRepository = {
     context: AuthSecurityContext;
     config: AuthSecurityConfig;
     profile: AuthProfile;
-    session: SessionPayload;
+    sessionExpiresAt: string;
     sessionIdentifierHash: string;
     nonceHash: string;
     now?: Date;
   }): Promise<{ sessionId: string }>;
   touchSession(input: {
-    nonceHash: string;
+    sessionIdentifierHash: string;
     touchIntervalSeconds: number;
     now?: Date;
   }): Promise<PersistentSessionRecord | null>;
   revokeSession(input: {
-    nonceHash: string;
+    sessionIdentifierHash: string;
     reason: string;
     now?: Date;
   }): Promise<{ sessionId: string | null }>;
@@ -155,8 +155,8 @@ export function getSessionHashes(session: SessionPayload, fingerprintSecret: str
   nonceHash: string;
 } {
   return {
-    sessionIdentifierHash: fingerprintAuthValue('session', `${session.trigram}:${session.nonce}`, fingerprintSecret),
-    nonceHash: fingerprintAuthValue('nonce', session.nonce, fingerprintSecret),
+    sessionIdentifierHash: fingerprintAuthValue('session', session.sessionIdentifier, fingerprintSecret),
+    nonceHash: fingerprintAuthValue('nonce', session.sessionIdentifier, fingerprintSecret),
   };
 }
 

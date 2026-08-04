@@ -31,15 +31,15 @@ export async function readSession(
   if (!session) return null;
 
   try {
-    const { nonceHash } = getSessionHashes(session, securityConfig.fingerprintSecret);
+    const { sessionIdentifierHash } = getSessionHashes(session, securityConfig.fingerprintSecret);
     const persistentSession = await securityRepository.touchSession({
-      nonceHash,
+      sessionIdentifierHash,
       touchIntervalSeconds: securityConfig.sessionTouchIntervalSeconds,
     });
     if (!persistentSession) return null;
 
-    const profile = await repository.findByTrigram(session.trigram);
-    if (!profile?.active || profile.id !== persistentSession.profileId) return null;
+    const profile = await repository.findById(persistentSession.profileId);
+    if (!profile?.active) return null;
 
     return buildAuthenticatedSession(session, profile);
   } catch {

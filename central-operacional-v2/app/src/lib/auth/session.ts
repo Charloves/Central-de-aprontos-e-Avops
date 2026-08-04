@@ -1,14 +1,11 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import { normalizeTrigram } from '@/lib/domain/normalization';
 import type { Role } from '@/lib/domain/types';
 
 export const SESSION_COOKIE_NAME = 'central_operacional_session';
 
 const SessionPayloadSchema = z.object({
-  trigram: z.string(),
-  exp: z.number(),
-  nonce: z.string(),
+  sessionIdentifier: z.string().regex(/^[A-Za-z0-9_-]{43,128}$/),
 });
 
 export type SessionPayload = z.infer<typeof SessionPayloadSchema>;
@@ -22,7 +19,6 @@ export type SessionCookieOptions = {
 };
 
 export function createSessionToken(input: {
-  trigram: string;
   secret: string;
   durationSeconds: number;
 }): string {
@@ -30,41 +26,28 @@ export function createSessionToken(input: {
 }
 
 export function createSessionTokenWithPayload(input: {
-  trigram: string;
   secret: string;
   durationSeconds: number;
-}): { token: string; payload: SessionPayload } {
+}): { token: string; payload: SessionPayload; expiresAt: string } {
   assertStrongSessionSecret(input.secret);
   if (!Number.isSafeInteger(input.durationSeconds) || input.durationSeconds <= 0) {
     throw new Error('SESSION_DURATION_SECONDS deve ser um inteiro positivo.');
   }
+  const sessionIdentifier = randomBytes(32).toString('base64url');
   const payload: SessionPayload = {
-    trigram: normalizeTrigram(input.trigram),
-    exp: Date.now() + input.durationSeconds * 1000,
-    nonce: randomUUID(),
+    sessionIdentifier,
   };
-  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
-  return { token: `${encoded}.${sign(encoded, input.secret)}`, payload };
+  return {
+    token: sessionIdentifier,
+    payload,
+    expiresAt: new Date(Date.now() + input.durationSeconds * 1000).toISOString(),
+  };
 }
 
 export function verifySessionToken(token: string, secret: string): SessionPayload | null {
   assertStrongSessionSecret(secret);
-  const [encoded, signature] = token.split('.');
-  if (!encoded || !signature) return null;
-
-  const expected = sign(encoded, secret);
-  if (!safeEqual(signature, expected)) return null;
-
-  let decoded: unknown;
-  try {
-    decoded = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
-  } catch {
-    return null;
-  }
-
-  const parsed = SessionPayloadSchema.safeParse(decoded);
+  const parsed = SessionPayloadSchema.safeParse({ sessionIdentifier: token });
   if (!parsed.success) return null;
-  if (Date.now() > parsed.data.exp) return null;
   return parsed.data;
 }
 
@@ -117,14 +100,4 @@ export function hasAdminAccess(session: ({ roles?: Role[] } & Partial<SessionPay
 
 export function hasAdminRole(roles: Role[]): boolean {
   return roles.includes('ADMIN') || roles.includes('COORDINATOR');
-}
-
-function sign(payload: string, secret: string): string {
-  return createHmac('sha256', secret).update(payload).digest('base64url');
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  return left.length === right.length && timingSafeEqual(left, right);
 }

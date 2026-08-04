@@ -6,9 +6,7 @@ import { buildAuthSecurityContext, getSessionHashes, type AuthSecurityConfig } f
 import type { SessionPayload } from './session';
 
 const baseSession: SessionPayload = {
-  trigram: 'ADM',
-  exp: Date.now() + 60_000,
-  nonce: 'nonce',
+  sessionIdentifier: 'opaque-session-token-for-admin-000000000001',
 };
 
 const securityConfig: AuthSecurityConfig = {
@@ -27,7 +25,7 @@ describe('server-side authorization', () => {
       { id: 'profile-admin', trigram: 'ADM', name: 'Admin Ficticio', active: true, roles: ['USER', 'ADMIN'] },
     ]);
 
-    await expect(authorizeCurrentAdminSession(baseSession, repository)).resolves.toMatchObject({
+    await expect(authorizeCurrentAdminSession({ ...baseSession, profileId: 'profile-admin' }, repository)).resolves.toMatchObject({
       trigram: 'ADM',
       roles: ['USER', 'ADMIN'],
     });
@@ -40,7 +38,7 @@ describe('server-side authorization', () => {
 
     repository.setProfile({ id: 'profile-admin', trigram: 'ADM', name: 'Admin Ficticio', active: true, roles: ['USER'] });
 
-    await expect(authorizeCurrentAdminSession(baseSession, repository)).resolves.toBeNull();
+    await expect(authorizeCurrentAdminSession({ ...baseSession, profileId: 'profile-admin' }, repository)).resolves.toBeNull();
   });
 
   it('nega imediatamente quando o perfil e desativado apos emissao do cookie', async () => {
@@ -48,7 +46,7 @@ describe('server-side authorization', () => {
       { id: 'profile-admin', trigram: 'ADM', name: 'Admin Ficticio', active: false, roles: ['USER', 'ADMIN'] },
     ]);
 
-    await expect(authorizeCurrentAdminSession(baseSession, repository)).resolves.toBeNull();
+    await expect(authorizeCurrentAdminSession({ ...baseSession, profileId: 'profile-admin' }, repository)).resolves.toBeNull();
   });
 
   it('autoriza usuario promovido apos emissao do cookie', async () => {
@@ -58,7 +56,7 @@ describe('server-side authorization', () => {
 
     repository.setProfile({ id: 'profile-user', trigram: 'ADM', name: 'Usuario Ficticio', active: true, roles: ['USER', 'COORDINATOR'] });
 
-    await expect(authorizeCurrentAdminSession(baseSession, repository)).resolves.toMatchObject({
+    await expect(authorizeCurrentAdminSession({ ...baseSession, profileId: 'profile-user' }, repository)).resolves.toMatchObject({
       roles: ['USER', 'COORDINATOR'],
     });
   });
@@ -67,7 +65,7 @@ describe('server-side authorization', () => {
     const repository = new FakeProfileRepository([
       { id: 'profile-admin', trigram: 'ADM', name: 'Admin Ficticio', active: true, roles: ['USER'] },
     ]);
-    const legacySession = { ...baseSession, roles: ['ADMIN' as const] };
+    const legacySession = { ...baseSession, profileId: 'profile-admin', roles: ['ADMIN' as const] };
 
     await expect(authorizeCurrentAdminSession(legacySession, repository)).resolves.toBeNull();
   });
@@ -86,13 +84,13 @@ describe('server-side authorization', () => {
       context,
       config: securityConfig,
       profile: { id: 'profile-admin', trigram: 'ADM', name: 'Admin Ficticio', active: true, roles: ['USER', 'ADMIN'] },
-      session: baseSession,
+      sessionExpiresAt: new Date(Date.now() + 60_000).toISOString(),
       sessionIdentifierHash: hashes.sessionIdentifierHash,
       nonceHash: hashes.nonceHash,
     });
 
     await expect(repository.touchSession({
-      nonceHash: hashes.nonceHash,
+      sessionIdentifierHash: hashes.sessionIdentifierHash,
       touchIntervalSeconds: securityConfig.sessionTouchIntervalSeconds,
     })).resolves.toMatchObject({
       profileId: 'profile-admin',
@@ -109,14 +107,10 @@ describe('server-side authorization', () => {
       config: securityConfig,
     });
     const expiredSession: SessionPayload = {
-      trigram: 'ADM',
-      exp: Date.now() - 1,
-      nonce: 'expired',
+      sessionIdentifier: 'opaque-session-token-for-admin-expired00001',
     };
     const revokedSession: SessionPayload = {
-      trigram: 'ADM',
-      exp: Date.now() + 60_000,
-      nonce: 'revoked',
+      sessionIdentifier: 'opaque-session-token-for-admin-revoked00001',
     };
     const expiredHashes = getSessionHashes(expiredSession, securityConfig.fingerprintSecret);
     const revokedHashes = getSessionHashes(revokedSession, securityConfig.fingerprintSecret);
@@ -125,7 +119,7 @@ describe('server-side authorization', () => {
       context,
       config: securityConfig,
       profile: { id: 'profile-admin', trigram: 'ADM', name: 'Admin Ficticio', active: true, roles: ['USER', 'ADMIN'] },
-      session: expiredSession,
+      sessionExpiresAt: new Date(Date.now() - 1).toISOString(),
       sessionIdentifierHash: expiredHashes.sessionIdentifierHash,
       nonceHash: expiredHashes.nonceHash,
     });
@@ -133,22 +127,22 @@ describe('server-side authorization', () => {
       context,
       config: securityConfig,
       profile: { id: 'profile-admin', trigram: 'ADM', name: 'Admin Ficticio', active: true, roles: ['USER', 'ADMIN'] },
-      session: revokedSession,
+      sessionExpiresAt: new Date(Date.now() + 60_000).toISOString(),
       sessionIdentifierHash: revokedHashes.sessionIdentifierHash,
       nonceHash: revokedHashes.nonceHash,
     });
-    await repository.revokeSession({ nonceHash: revokedHashes.nonceHash, reason: 'LOGOUT' });
+    await repository.revokeSession({ sessionIdentifierHash: revokedHashes.sessionIdentifierHash, reason: 'LOGOUT' });
 
     await expect(repository.touchSession({
-      nonceHash: expiredHashes.nonceHash,
+      sessionIdentifierHash: expiredHashes.sessionIdentifierHash,
       touchIntervalSeconds: securityConfig.sessionTouchIntervalSeconds,
     })).resolves.toBeNull();
     await expect(repository.touchSession({
-      nonceHash: revokedHashes.nonceHash,
+      sessionIdentifierHash: revokedHashes.sessionIdentifierHash,
       touchIntervalSeconds: securityConfig.sessionTouchIntervalSeconds,
     })).resolves.toBeNull();
     await expect(repository.touchSession({
-      nonceHash: '0'.repeat(64),
+      sessionIdentifierHash: '0'.repeat(64),
       touchIntervalSeconds: securityConfig.sessionTouchIntervalSeconds,
     })).resolves.toBeNull();
   });
@@ -161,34 +155,34 @@ describe('server-side authorization', () => {
       userAgent: 'Browser Ficticio',
       config: securityConfig,
     });
-    const firstSession: SessionPayload = { trigram: 'ADM', exp: Date.now() + 60_000, nonce: 'first' };
-    const secondSession: SessionPayload = { trigram: 'ADM', exp: Date.now() + 60_000, nonce: 'second' };
+    const firstSession: SessionPayload = { sessionIdentifier: 'opaque-session-token-for-admin-first000001' };
+    const secondSession: SessionPayload = { sessionIdentifier: 'opaque-session-token-for-admin-second00001' };
     const firstHashes = getSessionHashes(firstSession, securityConfig.fingerprintSecret);
     const secondHashes = getSessionHashes(secondSession, securityConfig.fingerprintSecret);
 
-    for (const [session, hashes] of [[firstSession, firstHashes], [secondSession, secondHashes]] as const) {
+    for (const hashes of [firstHashes, secondHashes]) {
       await repository.recordLoginSuccess({
         context,
         config: securityConfig,
         profile: { id: 'profile-admin', trigram: 'ADM', name: 'Admin Ficticio', active: true, roles: ['USER', 'ADMIN'] },
-        session,
+        sessionExpiresAt: new Date(Date.now() + 60_000).toISOString(),
         sessionIdentifierHash: hashes.sessionIdentifierHash,
         nonceHash: hashes.nonceHash,
       });
     }
 
-    await expect(repository.revokeSession({ nonceHash: firstHashes.nonceHash, reason: 'LOGOUT' })).resolves.toMatchObject({
+    await expect(repository.revokeSession({ sessionIdentifierHash: firstHashes.sessionIdentifierHash, reason: 'LOGOUT' })).resolves.toMatchObject({
       sessionId: expect.any(String),
     });
     await expect(repository.touchSession({
-      nonceHash: firstHashes.nonceHash,
+      sessionIdentifierHash: firstHashes.sessionIdentifierHash,
       touchIntervalSeconds: securityConfig.sessionTouchIntervalSeconds,
     })).resolves.toBeNull();
     await expect(repository.revokeProfileSessions({ profileId: 'profile-admin', reason: 'ADMIN_REVOKE_ALL' })).resolves.toEqual({
       revokedCount: 1,
     });
     await expect(repository.touchSession({
-      nonceHash: secondHashes.nonceHash,
+      sessionIdentifierHash: secondHashes.sessionIdentifierHash,
       touchIntervalSeconds: securityConfig.sessionTouchIntervalSeconds,
     })).resolves.toBeNull();
   });

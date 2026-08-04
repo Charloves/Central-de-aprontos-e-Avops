@@ -71,7 +71,9 @@ describe('login by trigram', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('login deveria ter sucesso');
     expect(result.cookie).toMatchObject({ httpOnly: true, secure: false, sameSite: 'lax' });
-    expect(verifySessionToken(result.token, STRONG_SECRET)).toMatchObject({ trigram: 'ABC' });
+    expect(result.token).not.toContain('ABC');
+    expect(result.token).not.toContain('Militar');
+    expect(verifySessionToken(result.token, STRONG_SECRET)).toEqual({ sessionIdentifier: result.token });
     expect(result.audit).toMatchObject({ status: 'OK', reason: 'VALID' });
   });
 
@@ -88,7 +90,7 @@ describe('login by trigram', () => {
     if (result.ok) expect(result.cookie.secure).toBe(true);
   });
 
-  it('normaliza trigrama sem colocar papeis no token', async () => {
+  it('normaliza trigrama sem colocar trigrama ou papeis no token', async () => {
     const coordinator = await authenticateTrigram({
       rawTrigram: 'coo',
       repository,
@@ -102,8 +104,11 @@ describe('login by trigram', () => {
       durationSeconds: 3600,
     });
 
-    expect(coordinator.ok && verifySessionToken(coordinator.token, STRONG_SECRET)).toMatchObject({ trigram: 'COO' });
-    expect(admin.ok && verifySessionToken(admin.token, STRONG_SECRET)).toMatchObject({ trigram: 'ADM' });
+    if (!coordinator.ok || !admin.ok) throw new Error('logins deveriam ter sucesso');
+    expect(coordinator.token).not.toContain('COO');
+    expect(admin.token).not.toContain('ADM');
+    expect(verifySessionToken(coordinator.token, STRONG_SECRET)).toEqual({ sessionIdentifier: coordinator.token });
+    expect(verifySessionToken(admin.token, STRONG_SECRET)).toEqual({ sessionIdentifier: admin.token });
     expect(coordinator.ok && 'roles' in verifySessionToken(coordinator.token, STRONG_SECRET)!).toBe(false);
     expect(admin.ok && 'roles' in verifySessionToken(admin.token, STRONG_SECRET)!).toBe(false);
   });
@@ -209,6 +214,8 @@ describe('login by trigram', () => {
     });
 
     expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('login deveria ter sucesso');
+    expect(result.token).not.toContain('ABC');
     expect(securityRepository.auditEvents).toContainEqual(expect.objectContaining({ eventType: 'LOGIN_SUCCESS' }));
   });
 

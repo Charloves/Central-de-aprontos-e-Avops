@@ -173,8 +173,9 @@ Fluxo implementado:
 - `SupabaseProfileRepository` consulta `profiles` e `profile_roles` apenas no servidor.
 - `FakeProfileRepository` permite testes unitarios sem banco real.
 - `authenticateTrigram` normaliza e limita o formato do trigrama, consulta o repositorio, exige perfil ativo e retorna mensagem generica para trigrama inexistente, inativo ou malformado.
-- login valido emite cookie assinado `HttpOnly` com `SameSite=Lax`; `Secure` e usado em producao.
-- o cookie de sessao contem apenas `trigram`, `exp` e `nonce`; papeis administrativos nao sao fonte de autorizacao no token.
+- login valido emite cookie `HttpOnly` opaco com `SameSite=Lax`; `Secure` e usado em producao.
+- o cookie de sessao contem apenas um identificador aleatorio opaco, sem trigrama, `profile_id`, papeis, nonce ou expiracao legivel.
+- a expiracao e a revogacao sao verificadas em `auth_sessions`; o navegador nunca recebe dados de autorizacao.
 - toda requisicao administrativa recarrega o perfil ativo e os papeis atuais no servidor antes de autorizar `COORDINATOR` ou `ADMIN`.
 - se o perfil estiver inativo, inexistente ou perder o papel administrativo, o acesso administrativo deve ser negado imediatamente.
 - `SESSION_SECRET` e obrigatorio, deve ter pelo menos 32 caracteres e nao pode ser uma repeticao simples.
@@ -226,8 +227,8 @@ Funcoes SQL:
 - `auth_check_temporary_block`: verificacao preliminar de bloqueio, usada apenas como otimizacao.
 - `auth_finalize_login_failure`: RPC transacional que adquire advisory locks em ordem deterministica, encerra bloqueios expirados, revalida bloqueio ativo, registra a falha e cria bloqueio quando o limite e atingido.
 - `auth_finalize_login_success`: RPC transacional que adquire os mesmos locks, revalida bloqueio ativo, ajusta buckets, cria a sessao persistente e registra auditoria de sucesso na mesma transacao.
-- `auth_touch_session`: valida sessao e limita escrita de `last_seen_at` ao intervalo configurado.
-- `auth_revoke_session`: revoga sessao por HMAC do nonce.
+- `auth_touch_session`: RPC legada preservada para compatibilidade; o caminho operacional atual valida sessoes pelo `session_identifier_hash` em consulta server-only.
+- `auth_revoke_session`: RPC legada preservada para compatibilidade; o caminho operacional atual revoga sessoes pelo `session_identifier_hash` em consulta server-only.
 - `auth_revoke_profile_sessions`: revoga todas as sessoes de um perfil.
 - `auth_record_audit_event`: registra eventos sem identificadores em claro.
 - `auth_cleanup_security_state`: limpa dados expirados conforme retencoes separadas.
@@ -242,8 +243,8 @@ Fluxo atualizado:
 - a quinta falha e processada, registrada e cria bloqueio temporario; a sexta tentativa dentro da janela e recusada como bloqueada, sem virar nova falha comum;
 - se existir bloqueio expirado ainda nao levantado para os mesmos fingerprints, a RPC marca `lifted_at` e `lifted_reason = EXPIRED` antes de criar novo ciclo;
 - uma linha antiga de bloqueio nunca e sobrescrita para representar outro ciclo; `window_started_at`, `blocked_until` e `failed_attempts` permanecem auditaveis;
-- login valido so emite cookie se a RPC transacional confirmar a criacao da sessao persistente ligada ao nonce por HMAC;
-- rotas protegidas rejeitam sessao inexistente, expirada ou revogada no banco;
+- login valido so emite cookie se a RPC transacional confirmar a criacao da sessao persistente ligada ao identificador opaco por HMAC;
+- rotas protegidas calculam HMAC do identificador opaco, localizam a sessao persistente por `session_identifier_hash`, rejeitam sessao inexistente, expirada ou revogada e recarregam perfil ativo e papeis atuais pelo servidor;
 - logout revoga a sessao persistente e remove o cookie.
 
 Origem de rede:

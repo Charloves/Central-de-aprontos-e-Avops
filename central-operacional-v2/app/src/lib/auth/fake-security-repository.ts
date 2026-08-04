@@ -8,7 +8,6 @@ import type {
   PersistentSessionRecord,
 } from './security';
 import type { AuthProfile } from './profiles';
-import type { SessionPayload } from './session';
 
 type Bucket = {
   failures: number;
@@ -25,6 +24,7 @@ type Block = {
 };
 
 type SessionRecord = PersistentSessionRecord & {
+  sessionIdentifierHash: string;
   nonceHash: string;
   lastSeenAt: string | null;
 };
@@ -48,8 +48,8 @@ export class FakeAuthSecurityRepository implements AuthSecurityRepository {
 
   failNext = false;
 
-  getLastSeenForTest(nonceHash: string): string | null {
-    return this.sessions.get(nonceHash)?.lastSeenAt ?? null;
+  getLastSeenForTest(sessionIdentifierHash: string): string | null {
+    return this.sessions.get(sessionIdentifierHash)?.lastSeenAt ?? null;
   }
 
   getBlocksForTest(): Array<{
@@ -153,7 +153,7 @@ export class FakeAuthSecurityRepository implements AuthSecurityRepository {
     context: AuthSecurityContext;
     config: AuthSecurityConfig;
     profile: AuthProfile;
-    session: SessionPayload;
+    sessionExpiresAt: string;
     sessionIdentifierHash: string;
     nonceHash: string;
     now?: Date;
@@ -177,11 +177,12 @@ export class FakeAuthSecurityRepository implements AuthSecurityRepository {
       }
     }
     const sessionId = `session-${this.sessions.size + 1}`;
-    this.sessions.set(input.nonceHash, {
+    this.sessions.set(input.sessionIdentifierHash, {
       sessionId,
       profileId: input.profile.id,
+      sessionIdentifierHash: input.sessionIdentifierHash,
       nonceHash: input.nonceHash,
-      expiresAt: new Date(input.session.exp).toISOString(),
+      expiresAt: input.sessionExpiresAt,
       revokedAt: null,
       lastSeenAt: null,
     });
@@ -196,9 +197,9 @@ export class FakeAuthSecurityRepository implements AuthSecurityRepository {
     return { sessionId };
   }
 
-  async touchSession(input: { nonceHash: string; touchIntervalSeconds: number; now?: Date }): Promise<PersistentSessionRecord | null> {
+  async touchSession(input: { sessionIdentifierHash: string; touchIntervalSeconds: number; now?: Date }): Promise<PersistentSessionRecord | null> {
     this.throwIfRequested();
-    const session = this.sessions.get(input.nonceHash);
+    const session = this.sessions.get(input.sessionIdentifierHash);
     const now = input.now ?? new Date();
     if (!session || session.revokedAt || Date.parse(session.expiresAt) <= now.getTime()) return null;
     if (!session.lastSeenAt || Date.parse(session.lastSeenAt) <= now.getTime() - input.touchIntervalSeconds * 1000) {
@@ -207,9 +208,9 @@ export class FakeAuthSecurityRepository implements AuthSecurityRepository {
     return session;
   }
 
-  async revokeSession(input: { nonceHash: string; reason: string; now?: Date }): Promise<{ sessionId: string | null }> {
+  async revokeSession(input: { sessionIdentifierHash: string; reason: string; now?: Date }): Promise<{ sessionId: string | null }> {
     this.throwIfRequested();
-    const session = this.sessions.get(input.nonceHash);
+    const session = this.sessions.get(input.sessionIdentifierHash);
     if (!session) return { sessionId: null };
     session.revokedAt = (input.now ?? new Date()).toISOString();
     await this.recordAuditEvent({

@@ -27,18 +27,34 @@ describe('SupabaseAuthSecurityRepository', () => {
       if (name === 'auth_check_temporary_block') return { data: [{ blocked: false, blocked_until: null, scope: null }], error: null };
       if (name === 'auth_finalize_login_failure') return { data: [{ blocked: false, blocked_until: null }], error: null };
       if (name === 'auth_finalize_login_success') return { data: [{ session_id: 'session-id', blocked: false, blocked_until: null }], error: null };
-      if (name === 'auth_touch_session') {
-        return {
-          data: [{ session_id: 'session-id', profile_id: 'profile-id', expires_at: '2026-01-01T00:00:00.000Z', revoked_at: null }],
-          error: null,
-        };
-      }
-      if (name === 'auth_revoke_session') return { data: 'session-id', error: null };
       if (name === 'auth_revoke_profile_sessions') return { data: 1, error: null };
       if (name === 'auth_record_audit_event') return { data: 'event-id', error: null };
       return { data: null, error: null };
     });
-    const repository = new SupabaseAuthSecurityRepository({ rpc } as never);
+    const sessionRow = {
+      id: 'session-id',
+      profile_id: 'profile-id',
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      revoked_at: null,
+      last_seen_at: null,
+    };
+    const from = vi.fn((table: string) => {
+      if (table !== 'auth_sessions') throw new Error('tabela inesperada');
+      const selectMaybeSingle = vi.fn().mockResolvedValue({ data: sessionRow, error: null });
+      const selectEq = vi.fn().mockReturnValue({ maybeSingle: selectMaybeSingle });
+      const select = vi.fn().mockReturnValue({ eq: selectEq });
+      const updateSelectMaybeSingle = vi.fn().mockResolvedValue({
+        data: { id: 'session-id', profile_id: 'profile-id', expires_at: sessionRow.expires_at, revoked_at: null },
+        error: null,
+      });
+      const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateSelectMaybeSingle });
+      const gt = vi.fn().mockReturnValue({ select: updateSelect });
+      const is = vi.fn().mockReturnValue({ gt, select: updateSelect });
+      const updateEq = vi.fn().mockReturnValue({ is });
+      const update = vi.fn().mockReturnValue({ eq: updateEq });
+      return { select, update };
+    });
+    const repository = new SupabaseAuthSecurityRepository({ rpc, from } as never);
 
     await repository.checkTemporaryBlock({ context, config });
     await repository.recordLoginFailure({ context, config, reason: 'INVALID_CREDENTIALS' });
@@ -46,12 +62,12 @@ describe('SupabaseAuthSecurityRepository', () => {
       context,
       config,
       profile: { id: 'profile-id', trigram: 'CHA', name: 'Usuario Ficticio', active: true, roles: ['USER'] },
-      session: { trigram: 'CHA', exp: Date.now() + 60_000, nonce: 'nonce' },
+      sessionExpiresAt: new Date(Date.now() + 60_000).toISOString(),
       sessionIdentifierHash: 'd'.repeat(64),
       nonceHash: 'e'.repeat(64),
     });
-    await repository.touchSession({ nonceHash: 'e'.repeat(64), touchIntervalSeconds: 300 });
-    await repository.revokeSession({ nonceHash: 'e'.repeat(64), reason: 'LOGOUT' });
+    await repository.touchSession({ sessionIdentifierHash: 'd'.repeat(64), touchIntervalSeconds: 300 });
+    await repository.revokeSession({ sessionIdentifierHash: 'd'.repeat(64), reason: 'LOGOUT' });
     await repository.revokeProfileSessions({ profileId: 'profile-id', reason: 'ADMIN_REVOCATION' });
     await repository.recordAuditEvent({ eventType: 'LOGOUT', result: 'OK', context });
 

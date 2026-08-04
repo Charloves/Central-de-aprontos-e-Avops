@@ -9,7 +9,7 @@ Navegador
           -> PostgreSQL/Supabase
           -> Gmail API
           -> Google Drive por links existentes
-      -> Cookie de sessão assinado
+      -> Cookie de sessão opaco
 ```
 
 ## Modelo de acesso ao banco
@@ -320,7 +320,7 @@ Controla bloqueios temporarios apos falhas sucessivas. Cada ciclo de bloqueio e 
 - `user_agent_fingerprint`
 - `metadata`
 
-Vincula cookies assinados a estado persistente revogavel. Token e nonce brutos nao sao persistidos. `metadata` permanece restrito a `{}` ate existir allowlist aprovada.
+Vincula cookies opacos a estado persistente revogavel. O cookie contem somente um identificador aleatorio; o banco armazena apenas HMACs em `session_identifier_hash` e `nonce_hash`. Token bruto, trigrama, perfil, papeis e nonce bruto nao sao persistidos nem enviados como payload legivel. `metadata` permanece restrito a `{}` ate existir allowlist aprovada.
 
 ### `auth_audit_events`
 

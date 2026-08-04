@@ -20,10 +20,19 @@ export class SupabaseProfileRepository implements ProfileRepository {
     const normalized = normalizeTrigram(trigram);
     if (!normalized) return null;
 
+    return this.findOne('trigram', normalized);
+  }
+
+  async findById(profileId: string): Promise<AuthProfile | null> {
+    if (!profileId) return null;
+    return this.findOne('id', profileId);
+  }
+
+  private async findOne(column: 'id' | 'trigram', value: string): Promise<AuthProfile | null> {
     const { data, error } = await this.client
       .from('profiles')
       .select('id,trigram,name,active,profile_roles!profile_roles_profile_id_fkey(role)')
-      .eq('trigram', normalized)
+      .eq(column, value)
       .maybeSingle<ProfileRow>();
 
     if (error) throw error;

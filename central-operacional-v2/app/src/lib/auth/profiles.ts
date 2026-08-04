@@ -6,6 +6,7 @@ export type AuthProfile = Pick<Profile, 'id' | 'trigram' | 'name' | 'active'> & 
 
 export type ProfileRepository = {
   findByTrigram(trigram: string): Promise<AuthProfile | null>;
+  findById(profileId: string): Promise<AuthProfile | null>;
 };
 
 export type LoginAuditContract = {

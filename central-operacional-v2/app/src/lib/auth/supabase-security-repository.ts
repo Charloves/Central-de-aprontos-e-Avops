@@ -59,7 +59,7 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
       p_user_agent_fingerprint: input.context.userAgentFingerprint,
       p_session_identifier_hash: input.sessionIdentifierHash,
       p_nonce_hash: input.nonceHash,
-      p_expires_at: new Date(input.session.exp).toISOString(),
+      p_expires_at: input.sessionExpiresAt,
       p_enable_trigram: input.config.enableTrigramScope,
       p_enable_network: effectiveNetworkScopeEnabled(input.config, input.context.networkFingerprint),
       p_now: resolveNow(input.now),
@@ -72,30 +72,70 @@ export class SupabaseAuthSecurityRepository implements AuthSecurityRepository {
   }
 
   async touchSession(input: Parameters<AuthSecurityRepository['touchSession']>[0]): Promise<PersistentSessionRecord | null> {
-    const { data, error } = await this.client.rpc('auth_touch_session', {
-      p_nonce_hash: input.nonceHash,
-      p_touch_interval_seconds: input.touchIntervalSeconds,
-      p_now: resolveNow(input.now),
-    });
+    const now = new Date(resolveNow(input.now));
+    const { data: current, error: currentError } = await this.client
+      .from('auth_sessions')
+      .select('id,profile_id,expires_at,revoked_at,last_seen_at')
+      .eq('session_identifier_hash', input.sessionIdentifierHash)
+      .maybeSingle<{
+        id: string;
+        profile_id: string;
+        expires_at: string;
+        revoked_at: string | null;
+        last_seen_at: string | null;
+      }>();
+    if (currentError) throw currentError;
+    if (!current || current.revoked_at || Date.parse(current.expires_at) <= now.getTime()) return null;
+
+    const shouldTouch =
+      !current.last_seen_at || Date.parse(current.last_seen_at) <= now.getTime() - input.touchIntervalSeconds * 1000;
+    if (!shouldTouch) {
+      return {
+        sessionId: current.id,
+        profileId: current.profile_id,
+        expiresAt: current.expires_at,
+        revokedAt: current.revoked_at,
+      };
+    }
+
+    const { data, error } = await this.client
+      .from('auth_sessions')
+      .update({ last_seen_at: now.toISOString(), updated_at: now.toISOString() })
+      .eq('session_identifier_hash', input.sessionIdentifierHash)
+      .is('revoked_at', null)
+      .gt('expires_at', now.toISOString())
+      .select('id,profile_id,expires_at,revoked_at')
+      .maybeSingle<{ id: string; profile_id: string; expires_at: string; revoked_at: string | null }>();
     if (error) throw error;
-    const row = firstRow<{ session_id: string; profile_id: string; expires_at: string; revoked_at: string | null }>(data);
-    if (!row) return null;
+    if (!data) return null;
     return {
-      sessionId: row.session_id,
-      profileId: row.profile_id,
-      expiresAt: row.expires_at,
-      revokedAt: row.revoked_at,
+      sessionId: data.id,
+      profileId: data.profile_id,
+      expiresAt: data.expires_at,
+      revokedAt: data.revoked_at,
     };
   }
 
   async revokeSession(input: Parameters<AuthSecurityRepository['revokeSession']>[0]): Promise<{ sessionId: string | null }> {
-    const { data, error } = await this.client.rpc('auth_revoke_session', {
-      p_nonce_hash: input.nonceHash,
-      p_reason: input.reason,
-      p_now: resolveNow(input.now),
-    });
+    const now = resolveNow(input.now);
+    const { data, error } = await this.client
+      .from('auth_sessions')
+      .update({ revoked_at: now, revoked_reason: input.reason, updated_at: now })
+      .eq('session_identifier_hash', input.sessionIdentifierHash)
+      .is('revoked_at', null)
+      .select('id,profile_id')
+      .maybeSingle<{ id: string; profile_id: string }>();
     if (error) throw error;
-    return { sessionId: data ? String(data) : null };
+    if (!data) return { sessionId: null };
+    await this.recordAuditEvent({
+      eventType: 'LOGOUT',
+      result: 'OK',
+      profileId: data.profile_id,
+      sessionId: data.id,
+      reason: input.reason,
+      now: input.now,
+    });
+    return { sessionId: data.id };
   }
 
   async revokeProfileSessions(input: Parameters<AuthSecurityRepository['revokeProfileSessions']>[0]): Promise<{ revokedCount: number }> {

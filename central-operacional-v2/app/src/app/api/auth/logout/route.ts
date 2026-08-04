@@ -43,9 +43,9 @@ async function revokePersistentSession(request: Request): Promise<void> {
     const session = verifySessionToken(decodeURIComponent(token), secret);
     if (!session) return;
     const config = loadAuthSecurityConfig();
-    const { nonceHash } = getSessionHashes(session, config.fingerprintSecret);
+    const { sessionIdentifierHash } = getSessionHashes(session, config.fingerprintSecret);
     await new SupabaseAuthSecurityRepository().revokeSession({
-      nonceHash,
+      sessionIdentifierHash,
       reason: 'LOGOUT',
     });
   } catch {
