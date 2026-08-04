@@ -34,7 +34,7 @@ function runHarness(options: HarnessOptions = {}) {
     env: options.env ?? {
       SUPABASE_DEV_PROJECT_REF: VALID_PROJECT_REF,
       SUPABASE_TARGET_ENV: 'development',
-      SUPABASE_SERVICE_ROLE_KEY: 'service-role-secret-that-must-not-be-printed',
+      SUPABASE_SECRET_KEY: 'supabase-secret-that-must-not-be-printed',
     },
     supabaseCommand: options.supabaseCommand ?? LOCAL_NODE,
     supabaseArgsPrefix: options.supabaseArgsPrefix ?? [LOCAL_SUPABASE_ENTRYPOINT],

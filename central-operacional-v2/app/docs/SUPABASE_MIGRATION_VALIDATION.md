@@ -30,7 +30,7 @@ Credenciais devem ser configuradas somente por uma das opcoes abaixo:
 Nunca versionar:
 
 - `SUPABASE_ACCESS_TOKEN`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SECRET_KEY`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `AUTH_FINGERPRINT_SECRET`

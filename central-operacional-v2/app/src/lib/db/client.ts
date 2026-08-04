@@ -3,10 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 export function createServerSupabaseClient() {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SECRET_KEY;
 
   if (!url || !key) {
-    throw new Error('SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY devem estar configurados no servidor.');
+    throw new Error('Configuração Supabase do servidor ausente.');
   }
 
   return createClient(url, key, {

@@ -14,7 +14,9 @@ Navegador
 
 ## Modelo de acesso ao banco
 
-A V2 atual usa Supabase apenas pelo backend server-side. O navegador nao recebe acesso direto as tabelas, nao recebe lista de trigramas e nao usa `SUPABASE_SERVICE_ROLE_KEY`.
+A V2 atual usa Supabase apenas pelo backend server-side. O navegador nao recebe acesso direto as tabelas, nao recebe lista de trigramas e nao usa `SUPABASE_SECRET_KEY`.
+
+`SUPABASE_SECRET_KEY` e exclusiva do backend, deve usar a chave moderna `sb_secret_...`, nunca deve ser versionada e deve ser diferente em desenvolvimento, homologacao e producao.
 
 Classificacao inicial das tabelas publicas:
 

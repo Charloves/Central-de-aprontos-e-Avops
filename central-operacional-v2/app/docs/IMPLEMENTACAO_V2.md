@@ -40,13 +40,15 @@ Esta implementação inicial cria a fundação técnica da V2 sem alterar a Cent
 
 Nenhum segredo deve ser commitado. Use somente arquivos `.env.*.local` para credenciais reais.
 
+`SUPABASE_SECRET_KEY` é a chave secreta moderna da Supabase, no formato `sb_secret_...`, e é exclusiva do backend server-side. Ela não pode ser exposta como `NEXT_PUBLIC_*`, não pode ser registrada em logs, não deve aparecer em respostas HTTP e nunca deve ser versionada. Cada ambiente deve usar uma chave própria.
+
 ## Modelo de acesso ao Supabase
 
 A V2 não usa acesso direto do navegador ao Supabase. O navegador fala com a aplicação Next.js, e as operações de banco passam por rotas, server actions ou módulos server-side.
 
 Consequências práticas:
 
-- `SUPABASE_SERVICE_ROLE_KEY` deve existir apenas no servidor;
+- `SUPABASE_SECRET_KEY` deve existir apenas no servidor;
 - Client Components não devem importar repositórios ou clientes com service role;
 - `anon` e `authenticated` não recebem grants diretos nas tabelas da V2 nesta fase;
 - todas as tabelas do schema `public` ficam com RLS habilitado;
@@ -173,7 +175,7 @@ Fluxo implementado:
 - `POST /api/auth/logout` remove o cookie da sessao.
 - `/portal` exige sessao valida.
 - `/admin` e `/admin/roles` exigem `COORDINATOR` ou `ADMIN`.
-- modulos que usam `SUPABASE_SERVICE_ROLE_KEY` sao marcados com `server-only` para impedir importacao por Client Components.
+- modulos que usam `SUPABASE_SECRET_KEY` sao marcados com `server-only` para impedir importacao por Client Components.
 
 A lista de trigramas nunca e enviada ao navegador, e nenhum valor e salvo em `localStorage` ou `sessionStorage`.
 
