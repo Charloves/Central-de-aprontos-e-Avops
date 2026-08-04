@@ -70,6 +70,21 @@ Risco residual: defaults observados para `supabase_admin` permanecem como estado
 
 Qualquer exposição futura ao navegador deve ocorrer por migration própria com grants, policies e testes específicos.
 
+## Índices de foreign keys
+
+`supabase/migrations/0007_add_foreign_key_indexes.sql` adiciona índices B-tree de apoio para 22 foreign keys confirmadas no catálogo PostgreSQL sem cobertura por prefixo inicial.
+
+A estratégia é intencionalmente conservadora:
+
+- criar apenas índices no lado referenciador das FKs confirmadas;
+- usar `CREATE INDEX IF NOT EXISTS`;
+- qualificar tabelas com `public`;
+- manter execução transacional, sem `CREATE INDEX CONCURRENTLY`, porque a migration ocorre antes da carga operacional;
+- não remover índices reportados como `unused_index` antes de haver carga real e evidência de workload;
+- não alterar RLS, grants, policies, funções, constraints ou dados.
+
+Migrations futuras que criarem novas FKs devem criar índice de apoio na mesma migration, salvo quando PK, unique constraint ou índice composto existente já cobrir as colunas da FK como prefixo inicial e na mesma ordem.
+
 ## Overrides temporários de dependencias do Next
 
 O projeto permanece em `next@15.5.22`.
