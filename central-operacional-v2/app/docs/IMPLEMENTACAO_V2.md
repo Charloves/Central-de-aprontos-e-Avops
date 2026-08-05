@@ -144,6 +144,29 @@ Regras implementadas:
 - preservar o link original do Google Drive no registro retornado;
 - abertura do documento nao equivale a ciencia.
 
+## Módulo AVOP inicial
+
+A primeira versão funcional do módulo AVOP está disponível em `/portal/avops`.
+
+Regras implementadas:
+
+- a rota exige sessão válida e não revogada;
+- o perfil ativo e os papéis continuam sendo recarregados no servidor;
+- a listagem usa somente o `profileId` derivado da sessão server-side;
+- o navegador nunca informa `profile_id` ou trigrama para consultar ou assinar AVOP;
+- são exibidos apenas AVOPs `PUBLISHED` com interseção entre os públicos do perfil atual e os públicos do AVOP;
+- um AVOP destinado a `TODOS` é exibido para qualquer perfil ativo com público vigente;
+- perfis mistos são tratados por interseção de públicos, incluindo `PILOTO`, `TRIPULANTE`, `HSAR` e combinações;
+- o documento abre diretamente pela `drive_url` armazenada, sem download, cópia ou proxy pelo servidor;
+- abrir o documento não registra ciência;
+- a ciência exige ação explícita em `POST /api/avops/acknowledge`;
+- antes da escrita, o servidor revalida sessão, perfil ativo, aplicabilidade, status `PUBLISHED`, exigência de ciência e link de documento válido;
+- a escrita em `avop_acknowledgements` é idempotente pela constraint única `(avop_id, profile_id)`;
+- em conflito concorrente, o backend retorna a primeira ciência existente e preserva `acknowledged_at`;
+- falhas retornam mensagem genérica ao usuário, sem expor detalhes de banco.
+
+Limitação atual: o schema ainda não possui campo de prazo específico de AVOP. Enquanto esse dado não existir, a interface exibe `Sem prazo definido`.
+
 ## Staging historico
 
 `supabase/migrations/0003_historical_import_staging.sql` cria uma estrutura generica para lotes de importacao e registros historicos em staging.

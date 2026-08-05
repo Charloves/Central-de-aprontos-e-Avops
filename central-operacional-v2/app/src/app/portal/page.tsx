@@ -40,6 +40,7 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
           <article className="card">
             <h2>AVOP</h2>
             <p>Listagem aplicavel ao perfil e registro de ciencia idempotente.</p>
+            <Link href="/portal/avops">Abrir AVOPs</Link>
           </article>
           <article className="card">
             <h2>Aprontos</h2>
