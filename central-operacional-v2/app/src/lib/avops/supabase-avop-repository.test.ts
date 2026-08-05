@@ -11,6 +11,7 @@ describe('SupabaseAvopRepository', () => {
         avop_id: 'avop-1',
         profile_id: 'profile-1',
         acknowledged_at: '2026-05-01T10:00:00.000Z',
+        session_id: 'session-existing',
       },
       error: null,
     });
@@ -25,16 +26,23 @@ describe('SupabaseAvopRepository', () => {
 
     const repository = new SupabaseAvopRepository({ from } as never);
 
-    await expect(repository.acknowledgeAvop('profile-1', 'avop-1', new Date('2026-05-01T11:00:00.000Z'))).resolves.toEqual({
+    await expect(repository.acknowledgeAvop(
+      'profile-1',
+      'avop-1',
+      new Date('2026-05-01T11:00:00.000Z'),
+      'session-new',
+    )).resolves.toEqual({
       id: 'ack-existing',
       avopId: 'avop-1',
       profileId: 'profile-1',
       acknowledgedAt: '2026-05-01T10:00:00.000Z',
+      sessionId: 'session-existing',
     });
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({
       avop_id: 'avop-1',
       profile_id: 'profile-1',
       acknowledged_at: '2026-05-01T11:00:00.000Z',
+      session_id: 'session-new',
     }));
   });
 });

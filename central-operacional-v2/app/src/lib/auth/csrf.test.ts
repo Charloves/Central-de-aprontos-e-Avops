@@ -22,6 +22,24 @@ describe('csrf validation', () => {
     })).toMatchObject({ ok: false, status: 403 });
   });
 
+  it('rejeita origem malformada quando APP_ORIGIN esta configurado', () => {
+    expect(validateMutableRequest({
+      origin: 'not-a-valid-origin',
+      secFetchSite: 'same-origin',
+      appOrigin: APP_ORIGIN,
+      environment: 'development',
+    })).toMatchObject({ ok: false, status: 403 });
+  });
+
+  it('rejeita origem diferente em desenvolvimento quando APP_ORIGIN esta configurado', () => {
+    expect(validateMutableRequest({
+      origin: 'https://evil.example.test',
+      secFetchSite: 'same-origin',
+      appOrigin: APP_ORIGIN,
+      environment: 'development',
+    })).toMatchObject({ ok: false, status: 403 });
+  });
+
   it('rejeita origem ausente em producao', () => {
     expect(validateMutableRequest({
       origin: null,
@@ -47,6 +65,15 @@ describe('csrf validation', () => {
       appOrigin: undefined,
       environment: 'development',
     })).toEqual({ ok: true });
+  });
+
+  it('rejeita origem ausente quando APP_ORIGIN esta configurado', () => {
+    expect(validateMutableRequest({
+      origin: null,
+      secFetchSite: null,
+      appOrigin: APP_ORIGIN,
+      environment: 'development',
+    })).toMatchObject({ ok: false, status: 403 });
   });
 
   it('rejeita producao sem APP_ORIGIN configurado', () => {

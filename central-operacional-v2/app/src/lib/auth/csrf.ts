@@ -20,9 +20,7 @@ export function validateMutableRequest(input: {
     return isProduction ? forbidden() : { ok: true };
   }
 
-  if (!requestOrigin) {
-    return isProduction ? forbidden() : { ok: true };
-  }
+  if (!requestOrigin) return forbidden();
 
   if (requestOrigin !== trustedOrigin) return forbidden();
   return { ok: true };

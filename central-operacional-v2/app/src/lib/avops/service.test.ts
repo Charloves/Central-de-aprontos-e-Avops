@@ -10,6 +10,7 @@ vi.mock('server-only', () => ({}));
 const baseSession: AuthenticatedSession = {
   sessionIdentifier: 'opaque-session-token-avop-test-00000000001',
   profileId: 'profile-piloto',
+  persistentSessionId: 'persistent-session-id-1',
   trigram: 'PLT',
   roles: ['USER'],
 };
@@ -44,7 +45,7 @@ function repository() {
       avop({ id: 'avop-todos', number: 'AVOP 04-2026', title: 'Todos', audiences: ['TODOS'] }),
       avop({ id: 'avop-misto', number: 'AVOP 05-2026', title: 'Misto', audiences: ['PILOTO', 'TRIPULANTE'] }),
       avop({ id: 'avop-closed', number: 'AVOP 06-2026', title: 'Fechado', audiences: ['PILOTO'], status: 'CLOSED' }),
-      avop({ id: 'avop-invalid-link', number: 'AVOP 07-2026', title: 'Link invalido', audiences: ['PILOTO'], driveUrl: 'https://example.test/documento.pdf' }),
+      avop({ id: 'avop-invalid-link', number: 'AVOP 07-2026', title: 'Link invalido', audiences: ['PILOTO'], driveUrl: 'http://example.test/documento.pdf' }),
     ],
   });
 }
@@ -103,6 +104,7 @@ describe('AVOP module service', () => {
     expect(first).toMatchObject({ ok: true, alreadyAcknowledged: false });
     expect(second).toMatchObject({ ok: true, alreadyAcknowledged: true });
     expect(first.ok && second.ok ? second.acknowledgement.acknowledgedAt : null).toBe('2026-05-01T10:00:00.000Z');
+    expect(first.ok ? first.acknowledgement.sessionId : null).toBe('persistent-session-id-1');
     expect(repo.acknowledgementWrites).toBe(1);
   });
 
@@ -134,10 +136,18 @@ describe('AVOP module service', () => {
     await expect(acknowledgeAvopForSession({ session: baseSession, avopId: 'avop-invalid-link', repository: repo })).resolves.toMatchObject({ ok: false, reason: 'INVALID_DOCUMENT' });
   });
 
-  it('aceita somente link direto do Google Drive como documento valido', () => {
+  it('aceita URL HTTPS armazenada como documento valido', () => {
     expect(isValidDriveUrl('https://drive.google.com/file/d/ficticio/view')).toBe(true);
-    expect(isValidDriveUrl('https://docs.google.com/document/d/ficticio/edit')).toBe(false);
-    expect(isValidDriveUrl('https://example.test/documento.pdf')).toBe(false);
+    expect(isValidDriveUrl('https://example.test/documento.pdf', 'development')).toBe(true);
+    expect(isValidDriveUrl('https://example.test/documento.pdf', 'test')).toBe(true);
+    expect(isValidDriveUrl('https://example.test/documento.pdf', 'production')).toBe(false);
+    expect(isValidDriveUrl('https://drive.google.com.evil.example.test/file')).toBe(false);
+    expect(isValidDriveUrl('https://evil.example.test/drive.google.com/file')).toBe(false);
+    expect(isValidDriveUrl('https://user:pass@drive.google.com/file/d/ficticio/view')).toBe(false);
+    expect(isValidDriveUrl('http://example.test/documento.pdf')).toBe(false);
+    expect(isValidDriveUrl('javascript:alert(1)')).toBe(false);
+    expect(isValidDriveUrl('data:text/html,teste')).toBe(false);
+    expect(isValidDriveUrl('not-a-url')).toBe(false);
   });
 
   it('ignora identidade de terceiro enviada pelo navegador e usa somente a sessao', async () => {

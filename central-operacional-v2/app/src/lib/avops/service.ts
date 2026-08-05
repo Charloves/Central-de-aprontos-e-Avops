@@ -28,7 +28,12 @@ export async function acknowledgeAvopForSession(input: {
       return { ok: true, acknowledgement: avop.acknowledgement, alreadyAcknowledged: true };
     }
 
-    const acknowledgement = await input.repository.acknowledgeAvop(input.session.profileId, avopId, input.now);
+    const acknowledgement = await input.repository.acknowledgeAvop(
+      input.session.profileId,
+      avopId,
+      input.now,
+      input.session.persistentSessionId ?? null,
+    );
     return { ok: true, acknowledgement, alreadyAcknowledged: false };
   } catch {
     return { ok: false, reason: 'INTERNAL_ERROR' };

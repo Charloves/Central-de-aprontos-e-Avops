@@ -7,6 +7,7 @@ export type AvopAcknowledgement = {
   avopId: string;
   profileId: string;
   acknowledgedAt: string;
+  sessionId?: string | null;
 };
 
 export type AvopListItem = {
@@ -29,5 +30,5 @@ export type AvopAcknowledgeResult =
 export type AvopRepository = {
   listApplicableAvops(profileId: string, now?: Date): Promise<AvopListItem[]>;
   findApplicableAvop(profileId: string, avopId: string, now?: Date): Promise<AvopListItem | null>;
-  acknowledgeAvop(profileId: string, avopId: string, now?: Date): Promise<AvopAcknowledgement>;
+  acknowledgeAvop(profileId: string, avopId: string, now?: Date, sessionId?: string | null): Promise<AvopAcknowledgement>;
 };

@@ -25,6 +25,7 @@ type AcknowledgementRow = {
   avop_id: string;
   profile_id: string;
   acknowledged_at: string;
+  session_id: string | null;
 };
 
 export class SupabaseAvopRepository implements AvopRepository {
@@ -70,7 +71,12 @@ export class SupabaseAvopRepository implements AvopRepository {
     return avop;
   }
 
-  async acknowledgeAvop(profileId: string, avopId: string, now: Date = new Date()): Promise<AvopAcknowledgement> {
+  async acknowledgeAvop(
+    profileId: string,
+    avopId: string,
+    now: Date = new Date(),
+    sessionId: string | null = null,
+  ): Promise<AvopAcknowledgement> {
     const acknowledgedAt = now.toISOString();
     const { data, error } = await this.client
       .from('avop_acknowledgements')
@@ -78,10 +84,11 @@ export class SupabaseAvopRepository implements AvopRepository {
         avop_id: avopId,
         profile_id: profileId,
         acknowledged_at: acknowledgedAt,
+        session_id: sessionId,
         request_metadata: {},
         legacy_source: {},
       })
-      .select('id,avop_id,profile_id,acknowledged_at')
+      .select('id,avop_id,profile_id,acknowledged_at,session_id')
       .single<AcknowledgementRow>();
 
     if (!error && data) return mapAcknowledgement(data);
@@ -112,7 +119,7 @@ export class SupabaseAvopRepository implements AvopRepository {
     if (avopIds.length === 0) return new Map();
     const { data, error } = await this.client
       .from('avop_acknowledgements')
-      .select('id,avop_id,profile_id,acknowledged_at')
+      .select('id,avop_id,profile_id,acknowledged_at,session_id')
       .eq('profile_id', profileId)
       .in('avop_id', avopIds)
       .returns<AcknowledgementRow[]>();
@@ -123,7 +130,7 @@ export class SupabaseAvopRepository implements AvopRepository {
   private async loadAcknowledgement(profileId: string, avopId: string): Promise<AvopAcknowledgement | null> {
     const { data, error } = await this.client
       .from('avop_acknowledgements')
-      .select('id,avop_id,profile_id,acknowledged_at')
+      .select('id,avop_id,profile_id,acknowledged_at,session_id')
       .eq('profile_id', profileId)
       .eq('avop_id', avopId)
       .maybeSingle<AcknowledgementRow>();
@@ -156,6 +163,7 @@ function mapAcknowledgement(row: AcknowledgementRow): AvopAcknowledgement {
     avopId: row.avop_id,
     profileId: row.profile_id,
     acknowledgedAt: row.acknowledged_at,
+    sessionId: row.session_id,
   };
 }
 

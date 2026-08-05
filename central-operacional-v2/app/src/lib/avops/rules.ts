@@ -35,12 +35,17 @@ export function getAcknowledgementLabel(avop: AvopListItem): string {
   return 'Pendente';
 }
 
-export function isValidDriveUrl(value: string | null): boolean {
+export function isValidDriveUrl(value: string | null, environment = process.env.NODE_ENV): boolean {
   if (!value) return false;
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:') return false;
-    return url.hostname === 'drive.google.com';
+    if (url.username || url.password) return false;
+
+    const allowedHosts = environment === 'production'
+      ? new Set(['drive.google.com'])
+      : new Set(['drive.google.com', 'example.test']);
+    return allowedHosts.has(url.hostname);
   } catch {
     return false;
   }

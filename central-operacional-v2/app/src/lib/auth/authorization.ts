@@ -5,6 +5,7 @@ export type AuthenticatedSession = SessionPayload & {
   trigram: string;
   profileId: string;
   roles: AuthProfile['roles'];
+  persistentSessionId?: string;
 };
 
 export async function authorizeCurrentAdminSession(
@@ -18,11 +19,16 @@ export async function authorizeCurrentAdminSession(
   return buildAuthenticatedSession(session, profile);
 }
 
-export function buildAuthenticatedSession(session: SessionPayload, profile: AuthProfile): AuthenticatedSession {
+export function buildAuthenticatedSession(
+  session: SessionPayload,
+  profile: AuthProfile,
+  persistentSessionId?: string,
+): AuthenticatedSession {
   return {
     ...session,
     trigram: profile.trigram,
     profileId: profile.id,
     roles: profile.roles,
+    persistentSessionId,
   };
 }

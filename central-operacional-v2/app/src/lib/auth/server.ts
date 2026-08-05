@@ -41,7 +41,7 @@ export async function readSession(
     const profile = await repository.findById(persistentSession.profileId);
     if (!profile?.active) return null;
 
-    return buildAuthenticatedSession(session, profile);
+    return buildAuthenticatedSession(session, profile, persistentSession.sessionId);
   } catch {
     return null;
   }

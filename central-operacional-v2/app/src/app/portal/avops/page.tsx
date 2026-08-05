@@ -73,7 +73,7 @@ export default async function AvopsPage({ searchParams }: AvopsPageProps) {
                       </td>
                       <td>
                         {validDocument && avop.driveUrl ? (
-                          <a className="button secondary" href={avop.driveUrl} target="_blank" rel="noreferrer">
+                          <a className="button secondary" href={avop.driveUrl} target="_blank" rel="noopener noreferrer">
                             Abrir documento
                           </a>
                         ) : (

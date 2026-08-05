@@ -158,9 +158,12 @@ Regras implementadas:
 - um AVOP destinado a `TODOS` é exibido para qualquer perfil ativo com público vigente;
 - perfis mistos são tratados por interseção de públicos, incluindo `PILOTO`, `TRIPULANTE`, `HSAR` e combinações;
 - o documento abre diretamente pela `drive_url` armazenada, sem download, cópia ou proxy pelo servidor;
+- em produção, a `drive_url` precisa ser `https://drive.google.com` com hostname exato e sem credenciais na URL;
+- em `development` e `test`, `https://example.test` também é aceito para homologação com links fictícios sem abrir documentos reais;
 - abrir o documento não registra ciência;
 - a ciência exige ação explícita em `POST /api/avops/acknowledge`;
 - antes da escrita, o servidor revalida sessão, perfil ativo, aplicabilidade, status `PUBLISHED`, exigência de ciência e link de documento válido;
+- a ciência registra `session_id` persistente da sessão já validada, sem armazenar token bruto no registro de AVOP;
 - a escrita em `avop_acknowledgements` é idempotente pela constraint única `(avop_id, profile_id)`;
 - em conflito concorrente, o backend retorna a primeira ciência existente e preserva `acknowledged_at`;
 - falhas retornam mensagem genérica ao usuário, sem expor detalhes de banco.

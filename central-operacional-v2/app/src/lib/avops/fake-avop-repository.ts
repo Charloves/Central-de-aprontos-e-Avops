@@ -44,7 +44,12 @@ export class FakeAvopRepository implements AvopRepository {
     return this.withAcknowledgement(profileId, avop);
   }
 
-  async acknowledgeAvop(profileId: string, avopId: string, now: Date = new Date()): Promise<AvopAcknowledgement> {
+  async acknowledgeAvop(
+    profileId: string,
+    avopId: string,
+    now: Date = new Date(),
+    sessionId: string | null = null,
+  ): Promise<AvopAcknowledgement> {
     const acknowledgementKey = key(profileId, avopId);
     const existing = this.acknowledgements.get(acknowledgementKey);
     if (existing) return existing;
@@ -54,6 +59,7 @@ export class FakeAvopRepository implements AvopRepository {
       avopId,
       profileId,
       acknowledgedAt: now.toISOString(),
+      sessionId,
     };
     this.acknowledgementWrites += 1;
     this.acknowledgements.set(acknowledgementKey, created);
