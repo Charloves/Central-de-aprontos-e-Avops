@@ -150,17 +150,18 @@ describe('AVOP module service', () => {
     expect(isValidDriveUrl('not-a-url')).toBe(false);
   });
 
-  it('ignora identidade de terceiro enviada pelo navegador e usa somente a sessao', async () => {
-    const formData = new FormData();
-    formData.set('avopId', 'avop-piloto');
-    formData.set('profileId', 'profile-tripulante');
-    formData.set('trigram', 'TRP');
+  it('rejeita identidade de terceiro enviada pelo navegador', async () => {
+    for (const field of ['profileId', 'profile_id', 'trigram', 'trigrama']) {
+      const formData = new FormData();
+      formData.set('avopId', 'avop-piloto');
+      formData.set(field, 'TRP');
 
-    await expect(extractAcknowledgeAvopId(formData)).resolves.toBe('avop-piloto');
-    await expect(acknowledgeAvopForSession({
-      session: baseSession,
-      avopId: await extractAcknowledgeAvopId(formData),
-      repository: repository(),
-    })).resolves.toMatchObject({ ok: true });
+      await expect(extractAcknowledgeAvopId(formData)).resolves.toBe('');
+      await expect(acknowledgeAvopForSession({
+        session: baseSession,
+        avopId: await extractAcknowledgeAvopId(formData),
+        repository: repository(),
+      })).resolves.toMatchObject({ ok: false });
+    }
   });
 });

@@ -41,6 +41,12 @@ export async function acknowledgeAvopForSession(input: {
 }
 
 export async function extractAcknowledgeAvopId(formData: FormData): Promise<string> {
+  if (hasClientSuppliedIdentity(formData)) return '';
   const value = formData.get('avopId');
   return typeof value === 'string' ? value : '';
+}
+
+function hasClientSuppliedIdentity(formData: FormData): boolean {
+  const forbiddenFields = new Set(['profileid', 'profile_id', 'trigram', 'trigrama']);
+  return Array.from(formData.keys()).some((key) => forbiddenFields.has(key.toLowerCase()));
 }
