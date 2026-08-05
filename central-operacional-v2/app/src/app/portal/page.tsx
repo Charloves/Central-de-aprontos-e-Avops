@@ -44,7 +44,8 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
           </article>
           <article className="card">
             <h2>Aprontos</h2>
-            <p>Registro de presenca, justificativa e ciencia de material.</p>
+            <p>Consulta de aprontos, justificativa e ciencia de material.</p>
+            <Link href="/portal/aprontos">Abrir aprontos</Link>
           </article>
           <article className="card">
             <h2>OI</h2>

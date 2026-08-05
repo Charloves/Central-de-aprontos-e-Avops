@@ -170,6 +170,37 @@ Regras implementadas:
 
 Limitação atual: o schema ainda não possui campo de prazo específico de AVOP. Enquanto esse dado não existir, a interface exibe `Sem prazo definido`.
 
+## Módulo Apronto inicial
+
+A primeira versão funcional do módulo Apronto está disponível em `/portal/aprontos`.
+
+Regras implementadas:
+
+- a rota exige sessão válida e não revogada;
+- a listagem usa somente o `profileId` derivado da sessão server-side;
+- o navegador nunca informa `profile_id`, trigrama ou `session_id` para consultar ou alterar aprontos;
+- são exibidos apenas aprontos não rascunho com interseção entre os públicos do perfil atual e os públicos do apronto;
+- um apronto destinado a `TODOS` é exibido para qualquer perfil ativo com público vigente;
+- perfis mistos são tratados por interseção de públicos, incluindo `PILOTO`, `TRIPULANTE`, `HSAR` e combinações;
+- o material abre diretamente pela `drive_url` armazenada, sem download, cópia ou proxy pelo servidor;
+- em produção, a `drive_url` precisa ser `https://drive.google.com` com hostname exato e sem credenciais na URL;
+- em `development` e `test`, `https://example.test` também é aceito para homologação com links fictícios;
+- abrir o material não registra ciência;
+- a ciência de material exige ação explícita em `POST /api/aprontos/material`;
+- a justificativa exige ação explícita em `POST /api/aprontos/justify`;
+- as duas ações validam CSRF por `APP_ORIGIN`, sessão, perfil ativo, aplicabilidade e estado efetivo do apronto;
+- apronto `CLOSED`, rascunho, data inválida ou fechamento efetivo bloqueiam ações;
+- o fechamento efetivo ocorre no início do quarto dia após a data de realização, em `America/Sao_Paulo`;
+- enquanto o job automático não existir, o servidor calcula esse fechamento a cada requisição e não depende apenas do status persistido;
+- a ciência de material é idempotente por `(briefing_id, profile_id)` em `briefing_records` e preserva o primeiro `recorded_at`;
+- se não houver registro anterior, a ciência de material cria `attendance_status = PENDENTE`, sem inventar presença ou falta;
+- justificativas são registradas em `absence_justifications`, sem transformar justificativa em presença;
+- nova justificativa enquanto o apronto estiver aberto cria novo registro e preserva histórico; a interface exibe a mais recente;
+- registros legados vazios ou ambíguos são exibidos sem serem reinterpretados como presença, falta, justificativa ou ciência;
+- presença fica somente como leitura histórica nesta primeira versão. O usuário comum não recebe ação para se declarar `PRESENTE`.
+
+Limitação atual: o schema possui `material_acknowledged` e `recorded_at` em `briefing_records`, mas não possui timestamp separado para a ciência de material. Nesta primeira versão, o primeiro `recorded_at` do registro é preservado para idempotência. Se a auditoria exigir separar presença e ciência de material no futuro, será necessária migration própria.
+
 ## Staging historico
 
 `supabase/migrations/0003_historical_import_staging.sql` cria uma estrutura generica para lotes de importacao e registros historicos em staging.
