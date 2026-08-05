@@ -12,7 +12,7 @@ export function validateMutableRequest(input: {
 }): CsrfValidationResult {
   if (input.secFetchSite === 'cross-site') return forbidden();
 
-  const trustedOrigin = normalizeOrigin(input.appOrigin);
+  const trustedOrigin = normalizeOrigin(input.appOrigin) ?? defaultDevelopmentOrigin(input.environment);
   const requestOrigin = normalizeOrigin(input.origin);
   const isProduction = input.environment === 'production';
 
@@ -33,6 +33,10 @@ function normalizeOrigin(value: string | null | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+function defaultDevelopmentOrigin(environment: string | undefined): string | null {
+  return environment === 'production' ? null : 'http://localhost:3000';
 }
 
 function forbidden(): CsrfValidationResult {

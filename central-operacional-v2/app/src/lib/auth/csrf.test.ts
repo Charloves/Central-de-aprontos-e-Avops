@@ -58,13 +58,22 @@ describe('csrf validation', () => {
     })).toMatchObject({ ok: false, status: 403 });
   });
 
-  it('permite desenvolvimento local sem origem configurada', () => {
+  it('permite desenvolvimento local sem APP_ORIGIN apenas com origem localhost padrao', () => {
+    expect(validateMutableRequest({
+      origin: 'http://localhost:3000',
+      secFetchSite: 'same-origin',
+      appOrigin: undefined,
+      environment: 'development',
+    })).toEqual({ ok: true });
+  });
+
+  it('rejeita desenvolvimento local sem APP_ORIGIN quando a origem esta ausente', () => {
     expect(validateMutableRequest({
       origin: null,
       secFetchSite: null,
       appOrigin: undefined,
       environment: 'development',
-    })).toEqual({ ok: true });
+    })).toMatchObject({ ok: false, status: 403 });
   });
 
   it('rejeita origem ausente quando APP_ORIGIN esta configurado', () => {
