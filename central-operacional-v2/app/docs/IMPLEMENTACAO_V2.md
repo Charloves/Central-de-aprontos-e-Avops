@@ -33,7 +33,7 @@ Esta implementação inicial cria a fundação técnica da V2 sem alterar a Cent
 - Server actions/API routes de login e sessão por cookie.
 - Importação automatizada diretamente da planilha.
 - Envio real de e-mail por job agendado.
-- Fechamento automático de aprontos.
+- Homologação e aplicação remota do fechamento automático de aprontos por Supabase Cron.
 - Backup externo para Google Drive.
 
 ## Segurança
@@ -103,7 +103,7 @@ O projeto permanece em `next@15.5.22`.
 
 Foram aplicados overrides temporários e restritos a árvore do Next para:
 
-- `postcss@8.5.25`;
+- `postcss@8.5.26`;
 - `sharp@0.35.3`.
 
 Motivo: corrigir vulnerabilidades de produção apontadas pelo `npm audit` em dependencias transitivas usadas pelo Next, sem alterar a versão do framework nesta etapa.
@@ -200,6 +200,36 @@ Regras implementadas:
 - presença fica somente como leitura histórica nesta primeira versão. O usuário comum não recebe ação para se declarar `PRESENTE`.
 
 Limitação atual: o schema possui `material_acknowledged` e `recorded_at` em `briefing_records`, mas não possui timestamp separado para a ciência de material. Nesta primeira versão, o primeiro `recorded_at` do registro é preservado para idempotência. Se a auditoria exigir separar presença e ciência de material no futuro, será necessária migration própria.
+
+## Fechamento automático de aprontos
+
+`supabase/migrations/20260811132644_auto_close_briefings_cron.sql` prepara o fechamento persistente dos aprontos por Supabase Cron/pg_cron. A migration ainda precisa ser aplicada em development antes da homologação funcional desse job.
+
+Estrutura:
+
+- cria a extensão `pg_cron` se ainda não existir;
+- cria o schema interno `internal`, sem acesso para `PUBLIC`, `anon` ou `authenticated`;
+- cria `internal.auto_close_due_briefings(p_now timestamptz default now())` com `SECURITY INVOKER` e `search_path = pg_catalog, pg_temp`;
+- agenda o job estável `central_operacional_auto_close_briefings` com cron `0 * * * *`;
+- o job executa diretamente `select internal.auto_close_due_briefings();`, sem endpoint HTTP, URL, token ou segredo.
+
+Regra temporal:
+
+- apenas aprontos com `status = OPEN` e `event_date` não nula são elegíveis;
+- o limite é calculado com `(p_now AT TIME ZONE 'America/Sao_Paulo') >= (event_date + 3)::timestamp`;
+- exemplo: apronto realizado em 10/08 fecha a partir de 13/08 00:00 no fuso `America/Sao_Paulo`;
+- `p_now` é parâmetro explícito para testes e usa `now()` somente como padrão operacional.
+
+Concorrência e auditoria:
+
+- o fechamento usa operação set-based com `FOR UPDATE SKIP LOCKED` e `UPDATE ... RETURNING`;
+- execuções repetidas ou concorrentes não fecham o mesmo apronto duas vezes;
+- aprontos já `CLOSED` ou fechados manualmente não são sobrescritos;
+- para cada apronto efetivamente fechado, a função grava uma linha em `audit_log` com `action = BRIEFING_AUTO_CLOSED`;
+- reexecução sem mudança não gera auditoria;
+- nenhum `briefing_record`, justificativa, ciência de material, presença, falta ou snapshot é criado ou alterado pelo fechamento.
+
+O estado efetivo calculado pela aplicação continua bloqueando ações no prazo exato, mesmo se o cron atrasar alguns minutos.
 
 ## Staging historico
 
