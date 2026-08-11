@@ -56,7 +56,11 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
             <article className="card">
               <h2>Administracao</h2>
               <p>Area restrita a COORDINATOR e ADMIN.</p>
-              <Link href="/admin/roles">Abrir administracao</Link>
+              <div className="actions">
+                <Link href="/admin/dashboard">Dashboard</Link>
+                <Link href="/admin/auditoria">Auditoria nominal</Link>
+                <Link href="/admin/roles">Transferencia</Link>
+              </div>
             </article>
           ) : null}
         </div>

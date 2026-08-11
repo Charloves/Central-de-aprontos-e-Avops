@@ -41,6 +41,9 @@ export default async function AdminRolesPage() {
         <p>
           <Link href="/portal">Voltar ao portal</Link>
         </p>
+        <p>
+          <Link href="/admin/dashboard">Abrir dashboard gerencial</Link>
+        </p>
       </section>
     </main>
   );

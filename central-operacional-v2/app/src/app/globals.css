@@ -168,3 +168,31 @@ th {
   font-size: 0.86rem;
   margin: 0 0 8px;
 }
+
+.metric-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  margin: 14px 0;
+}
+
+.metric {
+  background: #eef5ff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.metric strong {
+  display: block;
+  font-size: 1.4rem;
+}
+
+.metric span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.audit-filter {
+  margin-top: 20px;
+}

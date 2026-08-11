@@ -154,6 +154,34 @@ Os links usam a mesma validacao dos modulos AVOP e Apronto: em producao apenas `
 
 O acesso ao banco usa somente `SUPABASE_SECRET_KEY` em modulo `server-only`. A pagina exige sessao persistente valida via `requireSession()`, de modo que perfil inexistente, inativo, sessao revogada, adulterada ou expirada nao acessa a consulta. Nenhuma policy de navegador foi criada para `ois`.
 
+## Dashboard gerencial e auditoria nominal
+
+As rotas protegidas `/admin/dashboard` e `/admin/auditoria` sao restritas a perfis ativos com papel atual `COORDINATOR` ou `ADMIN`. A autorizacao reutiliza `requireAdminSession()`, que revalida sessao persistente, perfil ativo e papeis atuais no servidor a cada requisicao. Papel enviado pelo navegador nunca participa da decisao.
+
+O dashboard numerico usa agregacao server-side em TypeScript sobre o schema existente. Nenhuma view, RPC ou migration adicional foi necessaria nesta primeira versao. O repositorio Supabase fica em modulo `server-only`, usa `SUPABASE_SECRET_KEY` apenas no backend e carrega somente as tabelas necessarias para AVOPs, aprontos, publicos, snapshots, ciencias, registros e justificativas.
+
+Fontes de denominador:
+
+- `SNAPSHOT`: usa membros nominais de `avop_publication_snapshot_members` ou `briefing_publication_snapshot_members`.
+- `OPERATIONAL_CURRENT`: usa perfis ativos e publicos vigentes atuais quando nao ha snapshot. Essa visao e operacional e nao reconstrucao historica exata.
+- `HISTORICAL_UNAVAILABLE`: exibido quando o snapshot ou suas limitacoes indicam perfil historico indisponivel.
+
+Regras de calculo:
+
+- o mesmo militar conta uma unica vez por AVOP ou apronto, mesmo quando pertence a multiplos publicos;
+- publicos mistos sao reconciliados por `profile_id`;
+- ciencia de AVOP repetida conta uma vez e preserva a primeira data na auditoria nominal;
+- justificativas multiplas do mesmo militar contam uma pessoa no dashboard, preservando o historico nominal;
+- justificativa nao vira presenca;
+- ciencia de material nao vira presenca;
+- ausencia de registro e status `PENDENTE` aparecem como pendencia ou sem classificacao;
+- divisao por zero retorna `0,0%`, sem `NaN` ou `Infinity`;
+- percentuais usam uma casa decimal.
+
+A auditoria nominal pagina os resultados no servidor e nao envia toda a base para Client Components. A pagina exibe apenas nome, trigrama, publicos aplicaveis, situacao, data e limitacao historica. Ela nao exibe e-mail, tokens, hashes de sessao, nonce, IP, fingerprints ou metadata de autenticacao.
+
+Limite atual: os denominadores de registros antigos sem snapshot sao rotulados como `OPERATIONAL_CURRENT`. Eles servem para gestao operacional, mas nao devem ser tratados como auditoria historica exata ate que a migracao preserve ou resolva evidencia nominal adequada.
+
 ## Módulo AVOP inicial
 
 A primeira versão funcional do módulo AVOP está disponível em `/portal/avops`.
