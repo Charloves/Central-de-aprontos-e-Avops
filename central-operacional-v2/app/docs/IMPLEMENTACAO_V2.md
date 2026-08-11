@@ -404,3 +404,32 @@ Riscos ainda pendentes antes de producao:
 - criar rotina agendada para `auth_cleanup_security_state`;
 - definir politica operacional de rotacao de `AUTH_FINGERPRINT_SECRET`;
 - avaliar protecao adicional contra negacao de servico direcionada a um trigrama especifico.
+
+## Transferencia administrativa
+
+A rota `/admin/roles` permite transferir `ADMIN` e `COORDINATOR` juntos para outro perfil ativo, mantendo `USER` no executor e no destino.
+
+Contrato da interface:
+
+- lista somente nome, trigrama e papeis atuais de perfis ativos com `ADMIN` ou `COORDINATOR`;
+- nao exibe e-mail por padrao;
+- exige trigrama do destino, repeticao do trigrama e confirmacao textual `TRANSFERIR ADMINISTRACAO`;
+- nao envia `profile_id`, `actor_profile_id`, `assigned_by`, `session_id` ou papeis pelo navegador;
+- apos sucesso, redireciona o executor para o portal comum, pois ele perde acesso administrativo imediatamente.
+
+Contrato de seguranca:
+
+- a identidade do executor vem exclusivamente da sessao persistente server-side;
+- a rota POST `/api/admin/roles/transfer` aplica CSRF fail-closed por `APP_ORIGIN`;
+- o servidor exige que o executor ainda tenha `ADMIN` no perfil ativo recarregado do banco;
+- destino inexistente, inativo, igual a origem ou invalido retorna falha generica;
+- papeis administrativos nunca entram no cookie.
+
+Banco:
+
+- `internal.transfer_management_roles(uuid, text, timestamptz)` contem a implementacao transacional;
+- a funcao usa advisory transaction lock estavel, revalida origem/destino apos o lock e faz papeis + auditoria na mesma transacao;
+- a aplicacao da migration nao executa transferencia automaticamente;
+- `public.transfer_management_roles(uuid, text, timestamptz)` e apenas um wrapper backend-only para chamada via Supabase Data API, ja que o schema `internal` nao e exposto ao PostgREST;
+- `PUBLIC`, `anon` e `authenticated` nao recebem `EXECUTE`; somente `service_role` pode chamar;
+- `audit_log.action = MANAGEMENT_ROLES_TRANSFERRED` preserva o historico real das transferencias, sem gravar trigrama em metadata.
