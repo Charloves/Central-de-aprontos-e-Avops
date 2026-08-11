@@ -43,6 +43,18 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.stack {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .card {
   border: 1px solid var(--line);
   border-radius: 18px;

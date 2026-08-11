@@ -144,6 +144,16 @@ Regras implementadas:
 - preservar o link original do Google Drive no registro retornado;
 - abertura do documento nao equivale a ciencia.
 
+## Modulo OI funcional
+
+A rota protegida `/portal/oi` consulta OIs ativas no servidor e reutiliza `src/lib/domain/oi-search.ts` como fonte unica da regra de busca. O usuario autenticado escolhe a aeronave `H-50` ou `H-125` e informa codigo completo, codigo-base/fase ou texto de missao. A entrada e validada por tamanho, caracteres permitidos e normalizacao segura antes da busca em memoria; nenhum filtro SQL e montado com texto livre do usuario.
+
+O modulo e exclusivamente consultivo. Abrir o documento nao registra ciencia, auditoria operacional, presenca ou qualquer escrita em `ois`. A URL exibida e a URL efetiva ja armazenada no banco, que recebe `PDF_FASE_URL` quando o importador encontrou esse campo, ou `PDF_URL` como fallback. A pagina mostra o intervalo de paginas como orientacao textual e nao inventa parametros de pagina para o Google Drive.
+
+Os links usam a mesma validacao dos modulos AVOP e Apronto: em producao apenas `https://drive.google.com`; em desenvolvimento e teste, `https://drive.google.com` e `https://example.test`. URLs com HTTP, credenciais, host semelhante, `javascript:`, `data:` ou formato invalido sao bloqueadas na interface.
+
+O acesso ao banco usa somente `SUPABASE_SECRET_KEY` em modulo `server-only`. A pagina exige sessao persistente valida via `requireSession()`, de modo que perfil inexistente, inativo, sessao revogada, adulterada ou expirada nao acessa a consulta. Nenhuma policy de navegador foi criada para `ois`.
+
 ## Módulo AVOP inicial
 
 A primeira versão funcional do módulo AVOP está disponível em `/portal/avops`.

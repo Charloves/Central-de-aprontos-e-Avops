@@ -148,4 +148,25 @@ describe('oi-search', () => {
 
     expect(searchOiDetailed(inactiveRecords, '01HE01D01', 'H50')).toEqual({ status: 'not_found', items: [] });
   });
+
+  it('nao usa fallback por fase quando codigo completo nao pertence a MISSOES', () => {
+    expect(searchOiDetailed(records, '01HE01D19', 'H50')).toEqual({ status: 'not_found', items: [] });
+  });
+
+  it('permite fallback por fase quando MISSOES estiver vazio', () => {
+    const noMissionList: OiRecord[] = [
+      {
+        ...records[0],
+        oiKey: 'PESOP|SPFO-2|02HE02|FASE_SEM_LISTA',
+        phaseId: '02HE02',
+        displayKey: '02HE02 - FASE SEM LISTA',
+        missionCodes: [],
+      },
+    ];
+
+    const result = searchOiDetailed(noMissionList, '02HE02D99', 'H50');
+
+    expect(result.status).toBe('single');
+    expect(result.items[0]?.phaseId).toBe('02HE02');
+  });
 });

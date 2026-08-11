@@ -50,6 +50,7 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
           <article className="card">
             <h2>OI</h2>
             <p>Pesquisa por H50/H125, missao completa e fase.</p>
+            <Link href="/portal/oi">Abrir OI</Link>
           </article>
           {hasAdminAccess(session) ? (
             <article className="card">
