@@ -208,6 +208,40 @@ Regras implementadas:
 
 Limitação atual: o schema ainda não possui campo de prazo específico de AVOP. Enquanto esse dado não existir, a interface exibe `Sem prazo definido`.
 
+## Administração de publicações
+
+A primeira versão administrativa para criação e publicação está disponível em:
+
+- `/admin/avops`
+- `/admin/avops/novo`
+- `/admin/aprontos`
+- `/admin/aprontos/novo`
+
+Regras implementadas:
+
+- somente sessões com papel atual `COORDINATOR` ou `ADMIN`, recarregado no servidor, podem acessar as telas;
+- rascunhos podem ser criados e editados enquanto estiverem em `DRAFT`;
+- registros publicados não podem ter público ou dados essenciais alterados silenciosamente por essas telas;
+- a identidade administrativa vem exclusivamente da sessão server-side;
+- campos enviados pelo navegador como `profile_id`, trigrama, papel, `actor_profile_id` ou `session_id` são rejeitados;
+- URLs seguem a validação dos módulos operacionais: em produção apenas `https://drive.google.com`; em desenvolvimento/teste também `https://example.test`;
+- a publicação é explícita e chama RPC backend-only com `SUPABASE_SECRET_KEY`;
+- a RPC cria atomicamente o estado publicado, os vínculos de públicos, um único snapshot nominal, os membros aplicáveis e o evento em `audit_log`;
+- `TODOS` inclui todos os perfis ativos no momento da publicação;
+- combinações de `PILOTO`, `TRIPULANTE` e `HSAR` usam união de perfis ativos;
+- militar em mais de um público conta uma única vez no denominador, mas o snapshot preserva os públicos que o tornaram aplicável;
+- publicação repetida retorna o snapshot existente e não duplica membros ou auditoria;
+- registros históricos e snapshots já existentes não são reconstruídos nem modificados.
+
+Eventos mínimos de auditoria:
+
+- `AVOP_DRAFT_CREATED`
+- `AVOP_PUBLISHED`
+- `BRIEFING_DRAFT_CREATED`
+- `BRIEFING_PUBLISHED`
+
+Ponto de integração futuro: a rotina de divulgação e cobrança por e-mail deve iniciar a partir do evento de publicação e do snapshot nominal preservado, sem recalcular o público histórico.
+
 ## Módulo Apronto inicial
 
 A primeira versão funcional do módulo Apronto está disponível em `/portal/aprontos`.

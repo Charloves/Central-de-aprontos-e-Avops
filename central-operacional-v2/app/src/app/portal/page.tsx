@@ -59,6 +59,8 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
               <div className="actions">
                 <Link href="/admin/dashboard">Dashboard</Link>
                 <Link href="/admin/auditoria">Auditoria nominal</Link>
+                <Link href="/admin/avops">Gerenciar AVOPs</Link>
+                <Link href="/admin/aprontos">Gerenciar aprontos</Link>
                 <Link href="/admin/roles">Transferencia</Link>
               </div>
             </article>

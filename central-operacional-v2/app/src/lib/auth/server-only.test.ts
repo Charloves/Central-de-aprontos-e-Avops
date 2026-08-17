@@ -15,6 +15,7 @@ describe('server-only boundaries', () => {
     join(srcDir, 'lib', 'briefings', 'supabase-briefing-repository.ts'),
     join(srcDir, 'lib', 'ois', 'supabase-oi-repository.ts'),
     join(srcDir, 'lib', 'dashboard', 'supabase-dashboard-repository.ts'),
+    join(srcDir, 'lib', 'admin', 'supabase-publication-repository.ts'),
   ])('marca modulo sensivel como server-only: %s', (filePath) => {
     expect(readFileSync(filePath, 'utf8').startsWith("import 'server-only';")).toBe(true);
   });
