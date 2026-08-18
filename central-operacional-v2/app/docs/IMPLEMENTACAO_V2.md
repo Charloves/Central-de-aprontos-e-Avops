@@ -273,6 +273,8 @@ O envio real futuro usara a conta funcional `cdout.1gav11@gmail.com`, nunca cont
 
 O roteiro operacional esta em `docs/GMAIL_OAUTH_SETUP.md`. O fluxo local `npm run gmail:oauth:local` existe apenas para obter consentimento OAuth e salvar `GMAIL_REFRESH_TOKEN` em `.env.local`, sem enviar e-mail, sem acessar Supabase e sem acessar Drive. Ele usa somente o escopo `https://www.googleapis.com/auth/gmail.send`, `access_type=offline`, `prompt=consent`, callback `localhost` e validacao de `state`.
 
+O script `npm run gmail:test:send` valida uma unica entrega real de teste, fora do cron e sem Supabase. Ele exige `APP_ENV=development`, `AVOP_EMAIL_MODE=dry-run`, `GMAIL_TEST_RECIPIENT` igual a `GMAIL_SENDER_EMAIL` e `CONFIRM_GMAIL_TEST_SEND=SEND_ONE_EMAIL`. A mensagem e ficticia, nao consulta `notification_schedule`, nao acessa Drive e nao imprime segredos nem a resposta bruta da API.
+
 Credenciais, authorization code, access token, refresh token, client secret, segredo de cron e `.env.local` nunca devem ser enviados por chat, registrados em issue, colados em documentacao ou versionados.
 
 Enquanto o app OAuth do Google estiver em Testing, autorizacoes com o escopo Gmail expiram em 7 dias, inclusive refresh tokens emitidos com acesso offline. Para uso duradouro, o app deve passar para Production apos a revisao do consent screen, dominio, justificativa do escopo `gmail.send` e requisitos de verificacao aplicaveis.

@@ -76,6 +76,33 @@ Antes de ativar `AVOP_EMAIL_MODE=gmail`:
 4. Execute `npm run lint`, `npm test -- --reporter=verbose`, `npm run typecheck`, `npm run build` e `npm audit --offline=false`.
 5. Mantenha `AVOP_EMAIL_MODE=dry-run` ate a etapa explicitamente autorizada de envio real.
 
+## Envio real unico controlado
+
+Depois que `npm run gmail:oauth:check` indicar todas as variaveis como presentes, existe um teste manual de entrega real com travas adicionais:
+
+```powershell
+$env:GMAIL_TEST_RECIPIENT = "cdout.1gav11@gmail.com"
+$env:CONFIRM_GMAIL_TEST_SEND = "SEND_ONE_EMAIL"
+npm run gmail:test:send
+```
+
+Regras do teste:
+
+- funciona somente com `APP_ENV=development`;
+- exige `AVOP_EMAIL_MODE=dry-run`;
+- exige `GMAIL_TEST_RECIPIENT`;
+- nesta primeira versao, `GMAIL_TEST_RECIPIENT` precisa ser exatamente igual a `GMAIL_SENDER_EMAIL`;
+- exige `CONFIRM_GMAIL_TEST_SEND=SEND_ONE_EMAIL`;
+- envia exatamente uma mensagem ficticia;
+- nao executa cron;
+- nao acessa Supabase;
+- nao acessa Google Drive;
+- nao consulta `notification_schedule`;
+- nao imprime client secret, refresh token, access token ou resposta bruta da Gmail API;
+- retorna somente sucesso com identificador local do teste, ou erro sanitizado.
+
+Use esse teste apenas para validar que a conta funcional autorizada consegue enviar. Ele nao homologa a engine de notificacoes, nao registra envio no banco e nao deve ser usado para cobrancas reais.
+
 ## Pendencias antes de producao
 
 - Criar migration futura para indice de apoio em `notification_log.profile_id`, apontado pelo Performance Advisor apos a homologacao da engine.
