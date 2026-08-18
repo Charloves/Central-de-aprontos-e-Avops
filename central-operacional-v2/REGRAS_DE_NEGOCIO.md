@@ -122,3 +122,17 @@ Regras históricas:
 - usar o snapshot da publicação como referência da auditoria histórica futura.
 - armazenar o snapshot em formato nominal, com uma linha por militar aplicável e público/perfil considerado;
 - preservar `migrated`, `source`, `source_reference` e `limitation_reason` quando a origem for importação ou quando o perfil histórico não puder ser comprovado.
+
+## 11. Divulgação e cobrança de AVOP
+
+- AVOP em `DRAFT` não gera divulgação nem cobrança.
+- A divulgação inicial envia uma mensagem por destinatário aplicável.
+- A cobrança é semanal nos marcos de 7, 14, 21 e 28 dias completos após a publicação.
+- Após o primeiro mês, a cobrança passa a ser mensal no mesmo dia-base da publicação, começando no segundo mês; quando o mês não tiver o dia-base, usar o último dia do mês.
+- A cobrança cessa ao completar 365 dias, ao registrar ciência, ao fechar a AVOP, ao inativar o perfil ou quando o militar deixa de pertencer ao público aplicável.
+- Militares que ingressarem posteriormente em público atualmente aplicável são identificados operacionalmente pelo job, sem alterar o snapshot nominal histórico da publicação.
+- Cada destinatário e marco possui chave idempotente própria; repetição ou concorrência do job não pode duplicar e-mail.
+- Destinatário sem e-mail válido gera ocorrência controlada e não aciona Gmail.
+- O link enviado aponta para a Central, não para o PDF do Drive, e a ciência continua exigindo ação explícita na aplicação.
+- O endpoint de cron exige `CRON_SECRET`; sem segredo válido, a execução falha fechada.
+- Em testes e homologação local, o modo `dry-run`/fake sender é obrigatório para não enviar e-mail real.

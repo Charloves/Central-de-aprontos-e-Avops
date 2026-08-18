@@ -242,6 +242,23 @@ Eventos mínimos de auditoria:
 
 Ponto de integração futuro: a rotina de divulgação e cobrança por e-mail deve iniciar a partir do evento de publicação e do snapshot nominal preservado, sem recalcular o público histórico.
 
+## Divulgação e cobrança de AVOP por e-mail
+
+A primeira versão local do mecanismo de e-mail fica isolada em módulos `server-only` e expõe o endpoint `POST /api/cron/avop-notifications` para futura execução por Vercel Cron. O endpoint exige `CRON_SECRET`, compara o segredo de forma segura e retorna erro genérico quando a configuração estiver ausente, fraca ou divergente. O modo padrão é `AVOP_EMAIL_MODE=dry-run`; envio real via Gmail só ocorre futuramente com `AVOP_EMAIL_MODE=gmail` e variáveis Gmail configuradas no servidor.
+
+Regras temporais implementadas:
+
+- divulgação inicial no primeiro processamento após a publicação;
+- cobranças nos marcos de 7, 14, 21 e 28 dias;
+- cobranças mensais a partir do segundo mês, usando o mesmo dia-base da publicação ou o último dia do mês quando necessário;
+- encerramento após 365 dias.
+
+O processamento cessa quando há ciência, quando a AVOP está `CLOSED`, quando o perfil fica inativo, quando o militar deixa de pertencer ao público aplicável ou quando ocorre erro permanente de e-mail. A entrada posterior em um público aplicável é tratada como pendência operacional atual, sem alterar o snapshot histórico da publicação.
+
+A migration `20260818120552_avop_email_notifications.sql` amplia `notification_schedule` e `notification_log` com marcador de cobrança, reserva por hash de token, chave idempotente SHA-256, contadores, erro permanente e motivo de encerramento. As RPCs `list_avop_notification_candidates`, `reserve_avop_notification` e `record_avop_notification_result` ficam sem acesso para `PUBLIC`, `anon` e `authenticated`; somente `service_role` pode executá-las. O navegador não recebe acesso direto às tabelas nem às RPCs.
+
+Os e-mails são montados em português, com identificação e título da AVOP e link para a Central. O PDF do Drive não é usado como ciência automática. O corpo completo do e-mail, tokens OAuth, refresh token, segredo de cron e credenciais não são gravados no banco nem em logs. Cabeçalhos e destinatários continuam sujeitos às validações MIME já implementadas no módulo Gmail.
+
 ## Módulo Apronto inicial
 
 A primeira versão funcional do módulo Apronto está disponível em `/portal/aprontos`.

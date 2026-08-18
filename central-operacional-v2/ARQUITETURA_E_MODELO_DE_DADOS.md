@@ -240,22 +240,45 @@ As abas legadas `OI_H50` e `OI_H125` mapeiam diretamente para esta tabela. O imp
 - `activity_type`
 - `activity_id`
 - `profile_id`
+- `notification_type`
+- `marker`
 - `last_sent_at`
 - `next_send_at`
 - `send_count`
+- `attempt_count`
+- `failed_attempt_count`
+- `reserved_at`
+- `reserved_until`
+- `reservation_token_hash`
+- `permanent_failure_at`
+- `stopped_at`
+- `stopped_reason`
+- `metadata`
 - `status`
 - restrição única por atividade e perfil
+
+A programação de AVOP usa reserva transacional por hash de token e registro idempotente por marco. O navegador não acessa essas tabelas; o job roda no backend com `service_role`.
 
 ### `notification_log`
 
 - `id`
 - `schedule_id`
+- `activity_type`
+- `activity_id`
+- `profile_id`
 - `recipient`
 - `notification_type`
+- `marker`
 - `attempted_at`
 - `result`
 - `provider_message_id`
 - `error`
+- `error_kind`
+- `idempotency_key`
+- `attempt_number`
+- `reserved_at`
+
+O log não deve armazenar corpo completo de e-mail, tokens OAuth, refresh token, segredo de cron ou credenciais. Registros de falha usam mensagem controlada.
 
 ### `audit_log`
 
