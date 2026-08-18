@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   runControlledGmailTestSend,
   sanitizeError,
   validateControlledGmailTestEnvironment,
 } from './gmail-test-send';
+
+const execFileAsync = promisify(execFile);
+const appDir = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const validEnv = {
   APP_ENV: 'development',
@@ -163,5 +170,39 @@ describe('controlled gmail test send', () => {
     expect(sanitized).not.toContain('client-secret-test');
     expect(sanitized).not.toContain('refresh-token-test');
     expect(sanitized).toContain('[redacted]');
+  });
+
+  it('entrypoint real carrega modulos e falha antes do Gmail sem confirmacao', async () => {
+    let result: { code?: number; stdout?: string; stderr?: string };
+    try {
+      result = await execFileAsync(
+        process.execPath,
+        ['--experimental-strip-types', 'scripts/gmail-test-send.ts'],
+        {
+          cwd: appDir,
+          env: {
+            ...process.env,
+            APP_ENV: 'development',
+            NODE_ENV: 'development',
+            AVOP_EMAIL_MODE: 'dry-run',
+            GMAIL_CLIENT_ID: 'client-id-test',
+            GMAIL_CLIENT_SECRET: 'client-secret-test',
+            GMAIL_REFRESH_TOKEN: 'refresh-token-test',
+            GMAIL_SENDER_EMAIL: 'sender@example.test',
+            GMAIL_SENDER_NAME: 'Conta Funcional Teste',
+            GMAIL_TEST_RECIPIENT: 'sender@example.test',
+            CONFIRM_GMAIL_TEST_SEND: '',
+          },
+        },
+      );
+    } catch (error) {
+      result = error as { code: number; stdout: string; stderr: string };
+    }
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Envio Gmail de teste recusado');
+    expect(result.stderr).not.toContain('ERR_MODULE_NOT_FOUND');
+    expect(result.stderr).not.toContain('client-secret-test');
+    expect(result.stderr).not.toContain('refresh-token-test');
   });
 });

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseEnvContent, readEnvLocal } from './gmail-oauth-local';
+import { parseEnvContent, readEnvLocal } from './gmail-oauth-local.ts';
 
 const CONFIRMATION_VALUE = 'SEND_ONE_EMAIL';
 const TEST_SUBJECT = '[TESTE FICTICIO] Central Operacional V2 - envio controlado';
@@ -134,7 +134,7 @@ export async function runControlledGmailTestSend(input: {
 }
 
 async function loadGmailSender(): Promise<GmailSender> {
-  const gmailModule = await import('../src/lib/gmail/avop-email');
+  const gmailModule = await import('../src/lib/gmail/avop-email.ts');
   return gmailModule.sendGmailMessage;
 }
 
