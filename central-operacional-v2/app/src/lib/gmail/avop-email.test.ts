@@ -55,6 +55,31 @@ function encodedWord(value: string) {
   return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
 }
 
+function parseDecodedMessage(decoded: string) {
+  const [headerBlock, encodedBody] = decoded.split('\r\n\r\n');
+  const headers = new Map<string, string>();
+  for (const line of headerBlock.split('\r\n')) {
+    const separator = line.indexOf(':');
+    if (separator > 0) {
+      headers.set(line.slice(0, separator), line.slice(separator + 1).trim());
+    }
+  }
+  return {
+    headerBlock,
+    headers,
+    encodedBody,
+    body: Buffer.from(encodedBody, 'base64').toString('utf8'),
+  };
+}
+
+function decodeEncodedWord(value: string) {
+  return value
+    .replace(/\?=\s+=\?UTF-8\?B\?/g, '?==?UTF-8?B?')
+    .replace(/=\?UTF-8\?B\?([^?]+)\?=/g, (_match, encoded: string) => (
+      Buffer.from(encoded, 'base64').toString('utf8')
+    ));
+}
+
 async function expectInvalidMessage(input: {
   to?: string;
   subject?: string;
@@ -123,22 +148,25 @@ describe('avop gmail email', () => {
   });
 
   it('constroi mensagem em base64url sem executar chamada externa real', async () => {
+    const body = 'Link de ciência';
     await sendGmailMessage({
       to: 'destinatario@example.test',
-      subject: 'Pendencia AVOP',
-      body: 'Link de ciencia',
+      subject: 'Pendência AVOP',
+      body,
     });
 
     const { decoded, raw } = getDecodedRawMessage();
+    const message = parseDecodedMessage(decoded);
 
     expect(raw).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(decoded).toContain('From: Remetente Teste <sender@example.test>');
     expect(decoded).toContain('To: destinatario@example.test');
-    expect(decoded).toContain('Subject: Pendencia AVOP');
+    expect(message.headers.get('Subject')).toBe(encodedWord('Pendência AVOP'));
+    expect(decodeEncodedWord(message.headers.get('Subject') ?? '')).toBe('Pendência AVOP');
     expect(decoded).toContain('MIME-Version: 1.0');
-    expect(decoded).toContain('Content-Type: text/plain; charset="UTF-8"');
-    expect(decoded).toContain('\r\n\r\nLink de ciencia');
-    expect(decoded).toContain('Link de ciencia');
+    expect(message.headers.get('Content-Type')).toBe('text/plain; charset=UTF-8');
+    expect(message.headers.get('Content-Transfer-Encoding')).toBe('base64');
+    expect(message.body).toBe(body);
     expect(gmailMock.send).toHaveBeenCalledTimes(1);
   });
 
@@ -152,11 +180,35 @@ describe('avop gmail email', () => {
     });
 
     const { decoded } = getDecodedRawMessage();
+    const message = parseDecodedMessage(decoded);
 
     expect(decoded).toContain(`From: ${encodedWord('Coordenação 1º/11º GAV')} <sender@example.test>`);
-    expect(decoded).toContain(`Subject: ${encodedWord('Pendência de ciência')}`);
+    expect(message.headers.get('Subject')).toBe(encodedWord('Pendência de ciência'));
+    expect(decodeEncodedWord(message.headers.get('Subject') ?? '')).toBe('Pendência de ciência');
     expect(decoded).not.toContain('Coordenação 1º/11º GAV');
     expect(decoded).not.toContain('Pendência de ciência');
+  });
+
+  it('preserva portugues acentuado no assunto e no corpo MIME', async () => {
+    const subject = 'ação, ciência, divulgação, pendência, aviação, instrução, São Paulo e ç';
+    const body = [
+      'ação, ciência, divulgação, pendência, aviação, instrução, São Paulo e ç',
+      'Á, À, Â, Ã, É, Ê, Í, Ó, Ô, Õ, Ú, Ç',
+    ].join('\n');
+
+    await sendGmailMessage({
+      to: 'destinatario@example.test',
+      subject,
+      body,
+    });
+
+    const { decoded } = getDecodedRawMessage();
+    const message = parseDecodedMessage(decoded);
+
+    expect(message.headers.get('Content-Type')).toBe('text/plain; charset=UTF-8');
+    expect(message.headers.get('Content-Transfer-Encoding')).toBe('base64');
+    expect(decodeEncodedWord(message.headers.get('Subject') ?? '')).toBe(subject);
+    expect(message.body).toBe(body);
   });
 
   it('preserva quebras no corpo sem permitir alteracao dos cabecalhos', async () => {
@@ -167,10 +219,10 @@ describe('avop gmail email', () => {
     });
 
     const { decoded } = getDecodedRawMessage();
-    const [headers, body] = decoded.split('\r\n\r\n');
+    const message = parseDecodedMessage(decoded);
 
-    expect(headers).not.toContain('Bcc:');
-    expect(body).toContain('Linha 1\r\nBcc: invasor@example.test\r\nLinha 3');
+    expect(message.headerBlock).not.toContain('Bcc:');
+    expect(message.body).toContain('Linha 1\r\nBcc: invasor@example.test\r\nLinha 3');
   });
 
   it.each([
@@ -236,9 +288,9 @@ describe('avop gmail email', () => {
     ]);
 
     expect(email.subject).toContain('(2)');
-    expect(email.body).toContain('AVOP 01-2026 - Aviso um');
+    expect(email.body).toContain('AVOP 01-2026 — Aviso um');
     expect(email.body).toContain('https://example.test/avop-1');
-    expect(email.body).toContain('AVOP 02-2026 - Aviso dois');
+    expect(email.body).toContain('AVOP 02-2026 — Aviso dois');
     expect(email.body).toContain('https://example.test/avop-2');
   });
 

@@ -16,7 +16,7 @@ import { FakeAvopNotificationRepository } from './fake-avop-notification-reposit
 const baseCandidate: AvopNotificationCandidate = {
   avopId: 'avop-1',
   avopNumber: 'AVOP-HML-001',
-  title: 'AVOP ficticio de homologacao',
+  title: 'AVOP fictício de homologação',
   publicationDate: '2026-01-31',
   status: 'PUBLISHED',
   profileId: 'profile-1',
@@ -91,22 +91,48 @@ describe('avop email notification rules', () => {
     expect(validateCronSecret({ provided: secret, expected: undefined })).toBe(false);
   });
 
-  it('monta templates em portugues para divulgacao e cobranca', () => {
+  it('monta templates em portugues com acentuacao exata para divulgacao e cobranca', () => {
     const initial = buildAvopNotificationEmail({
       avopNumber: 'AVOP-HML-001',
-      title: 'Titulo ficticio',
+      title: 'Título fictício',
       marker: 'INITIAL',
       acknowledgementUrl: 'https://central.example.test/portal/avops?avop=1',
     });
-    expect(initial.subject).toContain('Divulgação de AVOP');
-    expect(initial.body).toContain('Para registrar ciência');
+    expect(initial.subject).toBe('Central Operacional — novo AVOP para ciência');
+    expect(initial.body).toBe([
+      'Prezado(a),',
+      '',
+      'Foi publicado o AVOP AVOP-HML-001 — Título fictício, aplicável ao seu perfil.',
+      '',
+      'Acesse a Central Operacional para realizar a leitura e registrar sua ciência:',
+      'https://central.example.test/portal/avops?avop=1',
+      '',
+      'A abertura do documento não registra ciência automaticamente. Após a leitura, utilize o campo próprio da Central para confirmar a ciência.',
+      '',
+      'Esta é uma mensagem automática da Central Operacional.',
+    ].join('\n'));
+
     const reminder = buildAvopNotificationEmail({
       avopNumber: 'AVOP-HML-001',
-      title: 'Titulo ficticio',
+      title: 'Título fictício',
       marker: 'WEEK_7',
       acknowledgementUrl: 'https://central.example.test/portal/avops?avop=1',
     });
-    expect(reminder.subject).toContain('Pendência');
+    expect(reminder.subject).toBe('Central Operacional — pendência de ciência de AVOP');
+    expect(reminder.body).toBe([
+      'Prezado(a),',
+      '',
+      'Consta pendente o registro de ciência do AVOP AVOP-HML-001 — Título fictício.',
+      '',
+      'Acesse a Central Operacional para realizar a leitura e registrar sua ciência:',
+      'https://central.example.test/portal/avops?avop=1',
+      '',
+      'A abertura do documento não registra ciência automaticamente. Após a leitura, utilize o campo próprio da Central para confirmar a ciência.',
+      '',
+      'Caso a ciência já tenha sido registrada, desconsidere esta mensagem.',
+      '',
+      'Esta é uma mensagem automática da Central Operacional.',
+    ].join('\n'));
   });
 });
 

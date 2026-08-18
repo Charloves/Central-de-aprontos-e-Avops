@@ -286,37 +286,37 @@ export function buildAvopNotificationEmail(input: {
 }): { subject: string; body: string } {
   if (input.marker === 'INITIAL') {
     return {
-      subject: `Divulgação de AVOP: ${input.avopNumber}`,
+      subject: 'Central Operacional — novo AVOP para ciência',
       body: [
-        'Caro tripulante,',
+        'Prezado(a),',
         '',
-        'Foi divulgado o seguinte AVOP, com necessidade de ciência:',
+        `Foi publicado o AVOP ${input.avopNumber} — ${input.title}, aplicável ao seu perfil.`,
         '',
-        `${input.avopNumber} - ${input.title}`,
-        '',
-        'Para registrar ciência, acesse o link abaixo:',
-        '',
+        'Acesse a Central Operacional para realizar a leitura e registrar sua ciência:',
         input.acknowledgementUrl,
         '',
-        'CDOUT - 1º/11º GAV. Este é um lembrete automático do sistema de controle de AVOPs.',
+        'A abertura do documento não registra ciência automaticamente. Após a leitura, utilize o campo próprio da Central para confirmar a ciência.',
+        '',
+        'Esta é uma mensagem automática da Central Operacional.',
       ].join('\n'),
     };
   }
 
   return {
-    subject: `Pendência de ciência de AVOP: ${input.avopNumber}`,
+    subject: 'Central Operacional — pendência de ciência de AVOP',
     body: [
-      'Caro tripulante,',
+      'Prezado(a),',
       '',
-      'Consta pendência de ciência do seguinte AVOP:',
+      `Consta pendente o registro de ciência do AVOP ${input.avopNumber} — ${input.title}.`,
       '',
-      `${input.avopNumber} - ${input.title}`,
-      '',
-      'Para registrar ciência, acesse o link abaixo:',
-      '',
+      'Acesse a Central Operacional para realizar a leitura e registrar sua ciência:',
       input.acknowledgementUrl,
       '',
-      'CDOUT - 1º/11º GAV. Este é um lembrete automático do sistema de controle de AVOPs.',
+      'A abertura do documento não registra ciência automaticamente. Após a leitura, utilize o campo próprio da Central para confirmar a ciência.',
+      '',
+      'Caso a ciência já tenha sido registrada, desconsidere esta mensagem.',
+      '',
+      'Esta é uma mensagem automática da Central Operacional.',
     ].join('\n'),
   };
 }

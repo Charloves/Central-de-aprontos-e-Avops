@@ -4,12 +4,13 @@ import { fileURLToPath } from 'node:url';
 import nextEnv from '@next/env';
 
 const CONFIRMATION_VALUE = 'SEND_ONE_EMAIL';
-const TEST_SUBJECT = '[TESTE FICTICIO] Central Operacional V2 - envio controlado';
-const TEST_BODY = [
-  'Mensagem ficticia de teste da Central Operacional V2.',
+export const TEST_SUBJECT = 'Central Operacional V2 — teste controlado de envio';
+export const TEST_BODY = [
+  'Este é um e-mail de teste da Central Operacional V2.',
   '',
-  'Este envio valida apenas a autorizacao OAuth da conta funcional Gmail.',
-  'Nao representa AVOP real, cobranca operacional ou ciencia automatica.',
+  'O envio foi realizado exclusivamente para validar a integração com a Gmail API, a acentuação e a formatação da mensagem.',
+  '',
+  'Nenhuma ciência ou ação é necessária.',
 ].join('\n');
 const HEADER_CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/;
 const SIMPLE_EMAIL_PATTERN = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;

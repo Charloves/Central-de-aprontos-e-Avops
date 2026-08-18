@@ -10,24 +10,27 @@ export type AvopEmailItem = {
 
 export function buildAvopReminderEmail(items: AvopEmailItem[]) {
   const subject = items.length === 1
-    ? 'Pendência de ciência de AVOP - 1º/11º GAV'
-    : `Pendências de ciência de AVOP (${items.length}) - 1º/11º GAV`;
+    ? 'Central Operacional — pendência de ciência de AVOP'
+    : `Central Operacional — pendências de ciência de AVOP (${items.length})`;
 
   const body = [
-    'Caro tripulante,',
+    'Prezado(a),',
     '',
-    'Constam pendências de ciência nos AVOPs abaixo:',
+    items.length === 1
+      ? 'Consta pendente o registro de ciência do AVOP abaixo:'
+      : 'Constam pendentes os registros de ciência dos AVOPs abaixo:',
     '',
     ...items.flatMap((item, index) => [
-      `${index + 1}. ${item.avopNumber} - ${item.title}`,
-      'Link para registrar ciência:',
+      `${index + 1}. ${item.avopNumber} — ${item.title}`,
+      'Acesse a Central Operacional para realizar a leitura e registrar sua ciência:',
       item.acknowledgementUrl,
       '',
     ]),
-    'Assim que a ciência for registrada, o respectivo AVOP deixará de constar nas próximas cobranças automáticas.',
+    'A abertura do documento não registra ciência automaticamente. Após a leitura, utilize o campo próprio da Central para confirmar a ciência.',
     '',
-    'CDOUT - 1º/11º GAV',
-    'Lembrete automático do sistema de controle de AVOPs.',
+    'Caso a ciência já tenha sido registrada, desconsidere esta mensagem.',
+    '',
+    'Esta é uma mensagem automática da Central Operacional.',
   ].join('\n');
 
   return { subject, body };
@@ -97,6 +100,10 @@ function formatDisplayName(value: string) {
   return encodeMimeHeaderValue(value);
 }
 
+function encodeMimeBody(value: string) {
+  return Buffer.from(value, 'utf8').toString('base64');
+}
+
 export async function sendGmailMessage(input: {
   to: string;
   subject: string;
@@ -126,9 +133,10 @@ export async function sendGmailMessage(input: {
     `To: ${safeRecipientEmail}`,
     `Subject: ${safeSubject}`,
     'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
     '',
-    input.body,
+    encodeMimeBody(input.body),
   ].join('\r\n')).toString('base64url');
 
   try {

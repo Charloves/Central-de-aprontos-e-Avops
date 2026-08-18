@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  TEST_BODY,
+  TEST_SUBJECT,
   loadTestSendEnvironment,
   preflightControlledGmailTestEnvironment,
   runControlledGmailTestSend,
@@ -171,8 +173,14 @@ describe('controlled gmail test send', () => {
     expect(sender).toHaveBeenCalledTimes(1);
     expect(sender).toHaveBeenCalledWith({
       to: 'sender@example.test',
-      subject: '[TESTE FICTICIO] Central Operacional V2 - envio controlado',
-      body: expect.stringContaining('Mensagem ficticia de teste da Central Operacional V2.'),
+      subject: 'Central Operacional V2 — teste controlado de envio',
+      body: [
+        'Este é um e-mail de teste da Central Operacional V2.',
+        '',
+        'O envio foi realizado exclusivamente para validar a integração com a Gmail API, a acentuação e a formatação da mensagem.',
+        '',
+        'Nenhuma ciência ou ação é necessária.',
+      ].join('\n'),
     });
     expect(JSON.stringify(logger.log.mock.calls)).toContain('gmail-test-local');
     expect(JSON.stringify(logger.log.mock.calls)).not.toContain('provider-message-id-test');
@@ -220,6 +228,20 @@ describe('controlled gmail test send', () => {
     expect(sanitized).not.toContain('client-secret-test');
     expect(sanitized).not.toContain('refresh-token-test');
     expect(sanitized).toContain('[redacted]');
+  });
+
+  it('mantem texto portugues acentuado do envio controlado', () => {
+    expect(TEST_SUBJECT).toBe('Central Operacional V2 — teste controlado de envio');
+    expect(TEST_BODY).toBe([
+      'Este é um e-mail de teste da Central Operacional V2.',
+      '',
+      'O envio foi realizado exclusivamente para validar a integração com a Gmail API, a acentuação e a formatação da mensagem.',
+      '',
+      'Nenhuma ciência ou ação é necessária.',
+    ].join('\n'));
+    expect(`${TEST_SUBJECT}\n${TEST_BODY}`).toContain('ação');
+    expect(`${TEST_SUBJECT}\n${TEST_BODY}`).toContain('ciência');
+    expect(`${TEST_SUBJECT}\n${TEST_BODY}`).toContain('acentuação');
   });
 
   it('carrega .env.local pelo mecanismo do Next a partir da pasta app informada', async () => {
