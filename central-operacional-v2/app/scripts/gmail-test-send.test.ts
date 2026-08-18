@@ -177,7 +177,7 @@ describe('controlled gmail test send', () => {
     try {
       result = await execFileAsync(
         process.execPath,
-        ['--experimental-strip-types', 'scripts/gmail-test-send.ts'],
+        ['--conditions=react-server', '--experimental-strip-types', 'scripts/gmail-test-send.ts'],
         {
           cwd: appDir,
           env: {
@@ -202,6 +202,7 @@ describe('controlled gmail test send', () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('Envio Gmail de teste recusado');
     expect(result.stderr).not.toContain('ERR_MODULE_NOT_FOUND');
+    expect(result.stderr).not.toContain('Client Component');
     expect(result.stderr).not.toContain('client-secret-test');
     expect(result.stderr).not.toContain('refresh-token-test');
   });

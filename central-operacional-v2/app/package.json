@@ -19,7 +19,7 @@
     "supabase:validate:dev": "node --experimental-strip-types scripts/validate-supabase-dev.ts",
     "gmail:oauth:check": "node --experimental-strip-types scripts/gmail-oauth-local.ts --check",
     "gmail:oauth:local": "node --experimental-strip-types scripts/gmail-oauth-local.ts --authorize",
-    "gmail:test:send": "node --experimental-strip-types scripts/gmail-test-send.ts"
+    "gmail:test:send": "node --conditions=react-server --experimental-strip-types scripts/gmail-test-send.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

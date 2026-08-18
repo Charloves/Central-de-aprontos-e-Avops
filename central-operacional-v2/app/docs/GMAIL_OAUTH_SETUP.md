@@ -88,6 +88,7 @@ npm run gmail:test:send
 
 Regras do teste:
 
+- executa o Node com `--conditions=react-server` porque o entrypoint local carrega modulo backend marcado com `server-only`;
 - funciona somente com `APP_ENV=development`;
 - exige `AVOP_EMAIL_MODE=dry-run`;
 - exige `GMAIL_TEST_RECIPIENT`;
