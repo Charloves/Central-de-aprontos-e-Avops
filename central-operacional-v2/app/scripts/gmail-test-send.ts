@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseEnvContent, readEnvLocal } from './gmail-oauth-local.ts';
+import nextEnv from '@next/env';
 
 const CONFIRMATION_VALUE = 'SEND_ONE_EMAIL';
 const TEST_SUBJECT = '[TESTE FICTICIO] Central Operacional V2 - envio controlado';
@@ -29,22 +29,43 @@ type GmailSender = (input: {
   body: string;
 }) => Promise<unknown>;
 type Logger = Pick<typeof console, 'log' | 'error'>;
+type PreflightStatus = 'present' | 'missing' | 'valid' | 'invalid' | 'dry-run' | 'other';
 
 export type ControlledGmailTestResult =
   | { ok: true; localTestId: string }
   | { ok: false; error: string };
 
+export type ControlledGmailTestPreflight = {
+  ok: boolean;
+  summary: {
+    APP_ENV: PreflightStatus;
+    AVOP_EMAIL_MODE: PreflightStatus;
+    GMAIL_SENDER_EMAIL: PreflightStatus;
+    GMAIL_TEST_RECIPIENT: PreflightStatus;
+    GMAIL_CREDENTIALS: PreflightStatus;
+    CONFIRM_GMAIL_TEST_SEND: 'present' | 'missing';
+  };
+};
+
 function appDir() {
   return dirname(dirname(fileURLToPath(import.meta.url)));
 }
 
-function envLocalPath() {
-  return join(appDir(), '.env.local');
-}
-
-export async function loadTestSendEnvironment(path = envLocalPath()): Promise<EnvMap> {
-  const fileEnv = await readEnvLocal(path);
-  return { ...fileEnv, ...process.env };
+export function loadTestSendEnvironment(projectDir = appDir()): EnvMap {
+  const existingEnv = { ...process.env };
+  nextEnv.loadEnvConfig(
+    projectDir,
+    true,
+    {
+      info: () => undefined,
+      error: () => undefined,
+    },
+    true,
+  );
+  for (const [key, value] of Object.entries(existingEnv)) {
+    if (value !== undefined) process.env[key] = value;
+  }
+  return { ...process.env };
 }
 
 export function validateControlledGmailTestEnvironment(env: EnvMap): string[] {
@@ -91,6 +112,29 @@ export function validateControlledGmailTestEnvironment(env: EnvMap): string[] {
   }
 
   return issues;
+}
+
+export function preflightControlledGmailTestEnvironment(env: EnvMap): ControlledGmailTestPreflight {
+  const credentialsAvailable = Boolean(
+    env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_REFRESH_TOKEN,
+  );
+  const summary: ControlledGmailTestPreflight['summary'] = {
+    APP_ENV: env.APP_ENV ? 'present' : 'missing',
+    AVOP_EMAIL_MODE: env.AVOP_EMAIL_MODE === 'dry-run' ? 'dry-run' : env.AVOP_EMAIL_MODE ? 'other' : 'missing',
+    GMAIL_SENDER_EMAIL: env.GMAIL_SENDER_EMAIL && isSafeSimpleEmail(env.GMAIL_SENDER_EMAIL)
+      ? 'valid'
+      : env.GMAIL_SENDER_EMAIL ? 'invalid' : 'missing',
+    GMAIL_TEST_RECIPIENT: env.GMAIL_TEST_RECIPIENT && isSafeSimpleEmail(env.GMAIL_TEST_RECIPIENT)
+      ? 'valid'
+      : env.GMAIL_TEST_RECIPIENT ? 'invalid' : 'missing',
+    GMAIL_CREDENTIALS: credentialsAvailable ? 'present' : 'missing',
+    CONFIRM_GMAIL_TEST_SEND: env.CONFIRM_GMAIL_TEST_SEND ? 'present' : 'missing',
+  };
+
+  return {
+    ok: validateControlledGmailTestEnvironment(env).length === 0,
+    summary,
+  };
 }
 
 function isSafeSimpleEmail(value: string) {
@@ -155,14 +199,23 @@ export function sanitizeError(error: unknown, env: EnvMap) {
 }
 
 async function main() {
-  const env = await loadTestSendEnvironment();
+  const env = loadTestSendEnvironment();
+  if (process.argv.includes('--preflight')) {
+    printPreflight(preflightControlledGmailTestEnvironment(env));
+    return;
+  }
   const result = await runControlledGmailTestSend({ env });
   process.exitCode = result.ok ? 0 : 1;
+}
+
+function printPreflight(preflight: ControlledGmailTestPreflight) {
+  console.log('Preflight sanitizado do envio Gmail controlado:');
+  for (const [name, status] of Object.entries(preflight.summary)) {
+    console.log(`- ${name}: ${status}`);
+  }
 }
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
   await main();
 }
-
-export { parseEnvContent };

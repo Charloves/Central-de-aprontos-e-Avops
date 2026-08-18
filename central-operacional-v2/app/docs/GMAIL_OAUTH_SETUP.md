@@ -89,6 +89,8 @@ npm run gmail:test:send
 Regras do teste:
 
 - executa o Node com `--conditions=react-server` porque o entrypoint local carrega modulo backend marcado com `server-only`;
+- carrega `.env.local` da pasta `app` com o mecanismo oficial do Next antes de consultar credenciais;
+- preserva a precedencia de variaveis ja definidas na sessao do PowerShell sobre `.env.local`;
 - funciona somente com `APP_ENV=development`;
 - exige `AVOP_EMAIL_MODE=dry-run`;
 - exige `GMAIL_TEST_RECIPIENT`;
@@ -103,6 +105,14 @@ Regras do teste:
 - retorna somente sucesso com identificador local do teste, ou erro sanitizado.
 
 Use esse teste apenas para validar que a conta funcional autorizada consegue enviar. Ele nao homologa a engine de notificacoes, nao registra envio no banco e nao deve ser usado para cobrancas reais.
+
+Para validar o carregamento de ambiente sem chamar Gmail e sem enviar e-mail:
+
+```powershell
+node --conditions=react-server --experimental-strip-types scripts/gmail-test-send.ts --preflight
+```
+
+O preflight exibe apenas estados sanitizados, como variaveis presentes/ausentes e compatibilidade entre remetente e destinatario. Ele nao imprime client ID, client secret, refresh token, access token, segredos ou qualquer fragmento desses valores.
 
 ## Pendencias antes de producao
 
