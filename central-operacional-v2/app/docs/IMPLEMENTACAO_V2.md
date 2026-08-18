@@ -259,6 +259,26 @@ A migration `20260818120552_avop_email_notifications.sql` amplia `notification_s
 
 Os e-mails são montados em português, com identificação e título da AVOP e link para a Central. O PDF do Drive não é usado como ciência automática. O corpo completo do e-mail, tokens OAuth, refresh token, segredo de cron e credenciais não são gravados no banco nem em logs. Cabeçalhos e destinatários continuam sujeitos às validações MIME já implementadas no módulo Gmail.
 
+### Autorizacao OAuth local da conta funcional Gmail
+
+O envio real futuro usara a conta funcional `cdout.1gav11@gmail.com`, nunca conta pessoal. O projeto ja possui o modulo server-only de Gmail com as variaveis:
+
+- `GMAIL_CLIENT_ID`
+- `GMAIL_CLIENT_SECRET`
+- `GMAIL_REFRESH_TOKEN`
+- `GMAIL_SENDER_EMAIL`
+- `GMAIL_SENDER_NAME`
+- `AVOP_EMAIL_MODE`
+- `CRON_SECRET`
+
+O roteiro operacional esta em `docs/GMAIL_OAUTH_SETUP.md`. O fluxo local `npm run gmail:oauth:local` existe apenas para obter consentimento OAuth e salvar `GMAIL_REFRESH_TOKEN` em `.env.local`, sem enviar e-mail, sem acessar Supabase e sem acessar Drive. Ele usa somente o escopo `https://www.googleapis.com/auth/gmail.send`, `access_type=offline`, `prompt=consent`, callback `localhost` e validacao de `state`.
+
+Credenciais, authorization code, access token, refresh token, client secret, segredo de cron e `.env.local` nunca devem ser enviados por chat, registrados em issue, colados em documentacao ou versionados.
+
+Enquanto o app OAuth do Google estiver em Testing, autorizacoes com o escopo Gmail expiram em 7 dias, inclusive refresh tokens emitidos com acesso offline. Para uso duradouro, o app deve passar para Production apos a revisao do consent screen, dominio, justificativa do escopo `gmail.send` e requisitos de verificacao aplicaveis.
+
+Pendencia antes de producao: o Performance Advisor apontou `notification_log.profile_id` sem indice de apoio. Essa correcao deve ser feita em migration propria antes da carga operacional, sem remover indices classificados como nao utilizados ate haver trafego representativo.
+
 ## Módulo Apronto inicial
 
 A primeira versão funcional do módulo Apronto está disponível em `/portal/aprontos`.

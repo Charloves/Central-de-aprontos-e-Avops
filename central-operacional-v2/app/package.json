@@ -16,7 +16,9 @@
     "supabase:migrations:list": "node --experimental-strip-types scripts/supabase-migrations-list.ts",
     "supabase:db:push:dry-run": "node --experimental-strip-types scripts/safe-supabase-dry-run.ts",
     "supabase:types:dev": "node --experimental-strip-types scripts/generate-supabase-types.ts",
-    "supabase:validate:dev": "node --experimental-strip-types scripts/validate-supabase-dev.ts"
+    "supabase:validate:dev": "node --experimental-strip-types scripts/validate-supabase-dev.ts",
+    "gmail:oauth:check": "node --experimental-strip-types scripts/gmail-oauth-local.ts --check",
+    "gmail:oauth:local": "node --experimental-strip-types scripts/gmail-oauth-local.ts --authorize"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
