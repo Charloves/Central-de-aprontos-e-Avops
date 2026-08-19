@@ -23,9 +23,9 @@ export default async function AdminBriefingsPage({ searchParams }: AdminBriefing
       <section className="panel">
         <div className="topbar">
           <div>
-            <p className="muted">Administracao de aprontos</p>
-            <h1>Publicacao com snapshot nominal</h1>
-            <p className="compact">Sessao administrativa: <strong>{session.trigram}</strong>.</p>
+            <p className="muted">Administração de aprontos</p>
+            <h1>Publicação com snapshot nominal</h1>
+            <p className="compact">Sessão administrativa: <strong>{session.trigram}</strong>.</p>
           </div>
           <div className="actions">
             <Link className="button" href="/admin/aprontos/novo">Novo apronto</Link>
@@ -34,7 +34,7 @@ export default async function AdminBriefingsPage({ searchParams }: AdminBriefing
         </div>
 
         {published ? <p className="success">Apronto publicado com snapshot nominal preservado.</p> : null}
-        {error ? <p className="alert" role="alert">Nao foi possivel publicar o apronto.</p> : null}
+        {error ? <p className="alert" role="alert">Não foi possível publicar o apronto.</p> : null}
 
         <div className="table-wrap">
           <table>
@@ -42,10 +42,10 @@ export default async function AdminBriefingsPage({ searchParams }: AdminBriefing
               <tr>
                 <th>Apronto</th>
                 <th>Data</th>
-                <th>Publicos</th>
+                <th>Públicos</th>
                 <th>Status</th>
                 <th>Snapshot</th>
-                <th>Acoes</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -56,7 +56,7 @@ export default async function AdminBriefingsPage({ searchParams }: AdminBriefing
                     <p className="compact">{briefing.title}</p>
                   </td>
                   <td>{formatDate(briefing.eventDate)}</td>
-                  <td>{briefing.audiences.join(', ') || 'Sem publico'}</td>
+                  <td>{briefing.audiences.join(', ') || 'Sem público'}</td>
                   <td>{statusLabel(briefing.status)}</td>
                   <td>{snapshotLabel(briefing.snapshot)}</td>
                   <td>
@@ -91,8 +91,8 @@ function statusLabel(status: AdminBriefingDraft['status']): string {
 }
 
 function snapshotLabel(snapshot: AdminBriefingDraft['snapshot']): string {
-  if (!snapshot) return 'Ainda nao publicado';
-  return `${snapshot.applicableProfileCount} aplicaveis`;
+  if (!snapshot) return 'Ainda não publicado';
+  return `${snapshot.applicableProfileCount} aplicáveis`;
 }
 
 function formatDate(value: string): string {

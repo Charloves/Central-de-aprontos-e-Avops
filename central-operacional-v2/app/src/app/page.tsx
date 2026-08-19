@@ -9,11 +9,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   return (
     <main className="shell">
       <section className="panel">
-        <p className="muted">1o/11o GAV</p>
+        <p className="muted">1º/11º GAV</p>
         <h1>Central Operacional V2</h1>
         <p>
-          Nova versao em desenvolvimento isolado. A Central atual e a planilha oficial permanecem preservadas ate a
-          homologacao e aprovacao formal.
+          Nova versão em desenvolvimento isolado. A Central atual e a planilha oficial permanecem preservadas até a
+          homologação e aprovação formal.
         </p>
 
         <form className="grid" action="/api/auth/login" method="post">
@@ -36,22 +36,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
         {error ? (
           <p className="alert" role="alert">
-            Nao foi possivel iniciar a sessao. Confira o trigrama e tente novamente.
+            Não foi possível iniciar a sessão. Confira o trigrama e tente novamente.
           </p>
         ) : null}
 
         <div className="grid" style={{ marginTop: 24 }}>
           <article className="card">
             <h2>AVOP</h2>
-            <p className="muted">Ciencia explicita, cobranca automatica e auditoria.</p>
+            <p className="muted">Ciência explícita, cobrança automática e auditoria.</p>
           </article>
           <article className="card">
             <h2>Aprontos</h2>
-            <p className="muted">Presenca, justificativa e fechamento automatico.</p>
+            <p className="muted">Presença, justificativa e fechamento automático.</p>
           </article>
           <article className="card">
             <h2>OI</h2>
-            <p className="muted">Busca por aeronave, fase, missao e codigo-base.</p>
+            <p className="muted">Busca por aeronave, fase, missão e código-base.</p>
           </article>
         </div>
       </section>

@@ -162,8 +162,8 @@ describe('login by trigram', () => {
       durationSeconds: 3600,
     });
 
-    expect(missingSecret).toMatchObject({ ok: false, status: 500, message: 'Configuracao de sessao indisponivel.' });
-    expect(weakSecret).toMatchObject({ ok: false, status: 500, message: 'Configuracao de sessao indisponivel.' });
+    expect(missingSecret).toMatchObject({ ok: false, status: 500, message: 'Configuração de sessão indisponível.' });
+    expect(weakSecret).toMatchObject({ ok: false, status: 500, message: 'Configuração de sessão indisponível.' });
   });
 
   it('registra cinco falhas e bloqueia tentativas seguintes com resposta generica', async () => {

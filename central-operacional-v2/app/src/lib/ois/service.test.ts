@@ -175,9 +175,9 @@ describe('OI module service', () => {
     expect(isValidOiDocumentUrl('https://example.test/docs/oi.pdf', 'production')).toBe(false);
     expect(isValidOiDocumentUrl('https://drive.google.com.evil.test/file', 'production')).toBe(false);
     expect(isValidOiDocumentUrl('https://user:pass@drive.google.com/file/d/ficticio/view', 'production')).toBe(false);
-    expect(formatPageRange(10, 12)).toBe('Paginas 10 a 12');
-    expect(formatPageRange(10, null)).toBe('Pagina 10');
-    expect(formatPageRange(10, 8)).toBe('Pagina 10');
+    expect(formatPageRange(10, 12)).toBe('Páginas 10 a 12');
+    expect(formatPageRange(10, null)).toBe('Página 10');
+    expect(formatPageRange(10, 8)).toBe('Página 10');
   });
 
   it('falha do Supabase nega com seguranca e mensagem generica', async () => {

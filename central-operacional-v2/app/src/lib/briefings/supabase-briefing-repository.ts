@@ -120,7 +120,7 @@ export class SupabaseBriefingRepository implements BriefingRepository {
       if (current?.materialAcknowledged) return current;
       if (current) return this.markMaterialAcknowledged(profileId, briefingId);
     }
-    throw error ?? new Error('Nao foi possivel registrar a ciencia do material.');
+    throw error ?? new Error('Não foi possível registrar a ciência do material.');
   }
 
   async createJustification(
