@@ -12,6 +12,11 @@ describe('Portuguese user-facing copy', () => {
     const briefings = readSource('app/portal/aprontos/page.tsx');
     const oiRules = readSource('lib/ois/rules.ts');
 
+    expect(home).toContain('1º/11º GAV');
+    expect(home).toContain(
+      'Nova versão em ambiente isolado de desenvolvimento. A Central atual e a planilha oficial permanecem',
+    );
+    expect(home).toContain('preservadas até a homologação e a aprovação formal.');
     expect(home).toContain('Ciência explícita, cobrança automática e auditoria.');
     expect(portal).toContain('Sessão V2 de homologação');
     expect(briefings).toContain('Não foi possível concluir a ação.');

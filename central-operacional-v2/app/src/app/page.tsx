@@ -12,8 +12,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <p className="muted">1º/11º GAV</p>
         <h1>Central Operacional V2</h1>
         <p>
-          Nova versão em desenvolvimento isolado. A Central atual e a planilha oficial permanecem preservadas até a
-          homologação e aprovação formal.
+          Nova versão em ambiente isolado de desenvolvimento. A Central atual e a planilha oficial permanecem
+          preservadas até a homologação e a aprovação formal.
         </p>
 
         <form className="grid" action="/api/auth/login" method="post">
