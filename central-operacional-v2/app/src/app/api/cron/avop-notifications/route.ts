@@ -8,7 +8,15 @@ import { SupabaseAvopNotificationRepository } from '@/lib/notifications/supabase
 
 export const dynamic = 'force-dynamic';
 
+export async function GET(request: Request) {
+  return handleCronRequest(request);
+}
+
 export async function POST(request: Request) {
+  return handleCronRequest(request);
+}
+
+async function handleCronRequest(request: Request) {
   const provided = extractCronSecret(request);
   if (!validateCronSecret({ provided, expected: process.env.CRON_SECRET })) {
     return noStore(NextResponse.json({ error: 'Nao foi possivel processar a requisicao.' }, { status: 403 }));

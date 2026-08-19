@@ -112,10 +112,10 @@ export async function sendGmailMessage(input: {
   const clientId = process.env.GMAIL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
   const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
-  const senderEmail = process.env.GMAIL_SENDER_EMAIL || 'cdout.1gav11@gmail.com';
-  const senderName = process.env.GMAIL_SENDER_NAME || 'CDOUT - 1º/11º GAV';
+  const senderEmail = process.env.GMAIL_SENDER_EMAIL;
+  const senderName = process.env.GMAIL_SENDER_NAME;
 
-  if (!clientId || !clientSecret || !refreshToken) {
+  if (!clientId || !clientSecret || !refreshToken || !senderEmail || !senderName) {
     throw new Error('Credenciais da Gmail API não configuradas.');
   }
 

@@ -244,7 +244,7 @@ Ponto de integração futuro: a rotina de divulgação e cobrança por e-mail de
 
 ## Divulgação e cobrança de AVOP por e-mail
 
-A primeira versão local do mecanismo de e-mail fica isolada em módulos `server-only` e expõe o endpoint `POST /api/cron/avop-notifications` para futura execução por Vercel Cron. O endpoint exige `CRON_SECRET`, compara o segredo de forma segura e retorna erro genérico quando a configuração estiver ausente, fraca ou divergente. O modo padrão é `AVOP_EMAIL_MODE=dry-run`; envio real via Gmail só ocorre futuramente com `AVOP_EMAIL_MODE=gmail` e variáveis Gmail configuradas no servidor.
+A primeira versão local do mecanismo de e-mail fica isolada em módulos `server-only` e expõe o endpoint `/api/cron/avop-notifications` para futura execução por Vercel Cron. A rota aceita `GET`, conforme o contrato da Vercel Cron, e mantém `POST` apenas para testes manuais protegidos. O endpoint exige `CRON_SECRET`, compara o segredo de forma segura e retorna erro genérico quando a configuração estiver ausente, fraca ou divergente. O modo padrão é `AVOP_EMAIL_MODE=dry-run`; envio real via Gmail só ocorre futuramente com `AVOP_EMAIL_MODE=gmail` e variáveis Gmail configuradas no servidor.
 
 Regras temporais implementadas:
 
@@ -276,6 +276,16 @@ O roteiro operacional esta em `docs/GMAIL_OAUTH_SETUP.md`. O fluxo local `npm ru
 O script `npm run gmail:test:send` valida uma unica entrega real de teste, fora do cron e sem Supabase. Ele exige `APP_ENV=development`, `AVOP_EMAIL_MODE=dry-run`, `GMAIL_TEST_RECIPIENT` igual a `GMAIL_SENDER_EMAIL` e `CONFIRM_GMAIL_TEST_SEND=SEND_ONE_EMAIL`. A mensagem e ficticia, nao consulta `notification_schedule`, nao acessa Drive e nao imprime segredos nem a resposta bruta da API.
 
 Credenciais, authorization code, access token, refresh token, client secret, segredo de cron e `.env.local` nunca devem ser enviados por chat, registrados em issue, colados em documentacao ou versionados.
+
+## Homologação Vercel
+
+A preparação de deployment está documentada em `docs/VERCEL_HOMOLOGATION.md`. A V2 deve ser configurada na Vercel com Root Directory `central-operacional-v2/app`, Framework Preset `Next.js`, Build Command `npm run build` e Node.js `22.x`.
+
+Na homologação, `SUPABASE_TARGET_ENV` permanece `development`, `AVOP_EMAIL_MODE` permanece `dry-run` e `APP_ORIGIN` deve ser a origem HTTPS exata do Preview da Vercel, sem barra final. Nenhuma variável secreta deve receber prefixo `NEXT_PUBLIC_`.
+
+O cron de AVOP é declarado em `vercel.json` como `0 11 * * *`, pois a Vercel usa UTC e esse horário corresponde a 08:00 em `America/Sao_Paulo` no fuso atual UTC-3. Preview Deployments não disparam Cron Jobs automaticamente, mas o endpoint continua protegido por `CRON_SECRET` para chamadas manuais de homologação.
+
+Pendência antes de produção: criar índice de apoio para `notification_log.profile_id` em migration própria, caso o volume de notificações justifique e antes de tráfego real.
 
 Enquanto o app OAuth do Google estiver em Testing, autorizacoes com o escopo Gmail expiram em 7 dias, inclusive refresh tokens emitidos com acesso offline. Para uso duradouro, o app deve passar para Production apos a revisao do consent screen, dominio, justificativa do escopo `gmail.send` e requisitos de verificacao aplicaveis.
 
