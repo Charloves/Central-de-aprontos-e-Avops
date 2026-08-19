@@ -1,0 +1,6 @@
+ID,NOME,EMAIL,ATIVO,PERFIS,PERFIL
+abc,Militar Alfa,alfa@example.test,SIM,PILOTO,
+def,Militar Bravo,bravo@example.test,SIM,"PILOTO E TRIPULANTES",
+ghi,Militar Charlie,,NAO,,HSAR
+abc,Militar Alfa Duplicado,alfa2@example.test,SIM,PILOTO,
+,Sem Trigrama,sem-trigrama@example.test,SIM,PILOTO,

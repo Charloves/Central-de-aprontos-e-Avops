@@ -1,0 +1,6 @@
+TIMESTAMP,ID,MODULO,ACAO,DETALHE,STATUS,IP,USER_AGENT
+06/05/2026 07:55:00,abc,SISTEMA,LOGIN,Sessao emitida,OK,192.0.2.10,Navegador ficticio
+2026-05-06T08:00:00-03:00,zzz,SISTEMA,LOGIN,Trigrama nao encontrado,NEGADO,192.0.2.11,Navegador ficticio
+2026-05-06T08:05:00+02:00,adm,ADMIN,ABRIR_PAINEL,Acesso administrativo,OK,192.0.2.12,Navegador ficticio
+06/05/2026 07:55:00,abc,SISTEMA,LOGIN,Sessao emitida,OK,192.0.2.10,Navegador ficticio
+2026-05-06T08:20:00-03:00,,SISTEMA,ACESSO,Sem identidade,OK,192.0.2.13,Navegador ficticio
