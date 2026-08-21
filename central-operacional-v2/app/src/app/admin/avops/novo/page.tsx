@@ -29,7 +29,7 @@ export default async function NewAvopPage({ searchParams }: NewAvopPageProps) {
       <section className="panel">
         <div className="topbar">
           <div>
-            <p className="muted">Administracao de AVOPs</p>
+            <p className="muted">Administração de AVOPs</p>
             <h1>{avop ? 'Editar AVOP' : 'Novo AVOP'}</h1>
             <p className="compact">Ator administrativo: <strong>{session.trigram}</strong>.</p>
           </div>
@@ -39,8 +39,8 @@ export default async function NewAvopPage({ searchParams }: NewAvopPageProps) {
         </div>
 
         {saved ? <p className="success">Rascunho salvo.</p> : null}
-        {error ? <p className="alert" role="alert">Nao foi possivel salvar o rascunho.</p> : null}
-        {isPublished ? <p className="alert">Registro publicado nao pode ser alterado por esta tela.</p> : null}
+        {error ? <p className="alert" role="alert">Não foi possível salvar o rascunho.</p> : null}
+        {isPublished ? <p className="alert">Registro publicado não pode ser alterado por esta tela.</p> : null}
 
         <form className="stack" action="/api/admin/avops/save" method="post">
           {avop ? <input type="hidden" name="draftId" value={avop.id} /> : null}
@@ -49,11 +49,11 @@ export default async function NewAvopPage({ searchParams }: NewAvopPageProps) {
             <input className="input" name="number" defaultValue={avop?.number ?? ''} required maxLength={80} disabled={isPublished} />
           </label>
           <label>
-            Titulo
+            Título
             <input className="input" name="title" defaultValue={avop?.title ?? ''} required maxLength={240} disabled={isPublished} />
           </label>
           <label>
-            Data de publicacao
+            Data de publicação
             <input className="input" name="publicationDate" type="date" defaultValue={avop?.publicationDate ?? todayIsoDate()} required disabled={isPublished} />
           </label>
           <label>
@@ -65,7 +65,7 @@ export default async function NewAvopPage({ searchParams }: NewAvopPageProps) {
             <input className="input" name="driveFileId" defaultValue={avop?.driveFileId ?? ''} maxLength={1000} disabled={isPublished} />
           </label>
           <label>
-            <input name="requiresAcknowledgement" type="checkbox" defaultChecked={avop?.requiresAcknowledgement ?? true} disabled={isPublished} /> Exige ciencia
+            <input name="requiresAcknowledgement" type="checkbox" defaultChecked={avop?.requiresAcknowledgement ?? true} disabled={isPublished} /> Exige ciência
           </label>
           <AudienceCheckboxes audiences={audiences} selected={avop?.audiences ?? []} disabled={isPublished} />
           <button className="button" type="submit" disabled={isPublished}>Salvar rascunho</button>
@@ -78,7 +78,7 @@ export default async function NewAvopPage({ searchParams }: NewAvopPageProps) {
 function AudienceCheckboxes({ audiences, selected, disabled }: { audiences: AdminAudience[]; selected: string[]; disabled: boolean }) {
   return (
     <fieldset className="card">
-      <legend>Publicos aplicaveis</legend>
+      <legend>Públicos aplicáveis</legend>
       <div className="actions">
         {audiences.map((audience) => (
           <label key={audience.id}>

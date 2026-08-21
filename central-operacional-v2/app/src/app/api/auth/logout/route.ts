@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 }
 
 function mutationFailure(status: 403) {
-  const response = NextResponse.json({ error: 'Nao foi possivel processar a requisicao.' }, { status });
+  const response = NextResponse.json({ error: 'Não foi possível processar a requisição.' }, { status });
   response.headers.set('Cache-Control', 'no-store');
   return response;
 }

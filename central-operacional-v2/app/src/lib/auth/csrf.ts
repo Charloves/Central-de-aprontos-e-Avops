@@ -1,4 +1,4 @@
-export const GENERIC_MUTATION_FAILURE = 'Nao foi possivel processar a requisicao.';
+export const GENERIC_MUTATION_FAILURE = 'Não foi possível processar a requisição.';
 
 export type CsrfValidationResult =
   | { ok: true }

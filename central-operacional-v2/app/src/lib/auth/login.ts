@@ -9,7 +9,7 @@ import {
 import type { LoginAuditContract, ProfileRepository } from './profiles';
 import { getSessionHashes, type AuthSecurityConfig, type AuthSecurityContext, type AuthSecurityRepository } from './security';
 
-export const GENERIC_LOGIN_FAILURE = 'Nao foi possivel iniciar a sessao. Confira o trigrama e tente novamente.';
+export const GENERIC_LOGIN_FAILURE = 'Não foi possível iniciar a sessão. Confira o trigrama e tente novamente.';
 
 export type LoginResult =
   | {
@@ -66,7 +66,7 @@ export async function authenticateTrigram(input: {
   if (!secret.ok) {
     return {
       ok: false,
-      message: 'Configuracao de sessao indisponivel.',
+      message: 'Configuração de sessão indisponível.',
       status: 500,
       audit: buildAudit('NEGADO', 'CONFIG_ERROR', normalized, occurredAt),
     };

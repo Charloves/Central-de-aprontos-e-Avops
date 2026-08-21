@@ -29,9 +29,9 @@ export default async function OiPage({ searchParams }: OiPageProps) {
       <section className="panel">
         <div className="topbar">
           <div>
-            <p className="muted">Modulo OI</p>
-            <h1>Consulta de Ordens de Instrucao</h1>
-            <p className="muted">Informe a aeronave e o codigo completo, codigo-base ou tipo de missao.</p>
+            <p className="muted">Módulo OI</p>
+            <h1>Consulta de Ordens de Instrução</h1>
+            <p className="muted">Informe a aeronave e o código completo, código-base ou tipo de missão.</p>
           </div>
           <Link className="button secondary" href="/portal">Voltar ao portal</Link>
         </div>
@@ -45,12 +45,12 @@ export default async function OiPage({ searchParams }: OiPageProps) {
             </select>
           </label>
           <label>
-            Codigo ou tipo de missao
+            Código ou tipo de missão
             <input
               className="input"
               maxLength={80}
               name="q"
-              placeholder="Ex.: 01HE01D07, 01HE01 ou adaptacao diurna"
+              placeholder="Ex.: 01HE01D07, 01HE01 ou adaptação diurna"
               defaultValue={typeof queryParam === 'string' ? queryParam : ''}
             />
           </label>
@@ -70,7 +70,7 @@ function OiSearchFeedback({ result }: { result: OiSearchResponse }) {
   if (!result.ok) {
     return (
       <p className="alert" role="alert">
-        Nao foi possivel realizar a consulta. Confira os dados informados e tente novamente.
+        Não foi possível realizar a consulta. Confira os dados informados e tente novamente.
       </p>
     );
   }
@@ -78,7 +78,7 @@ function OiSearchFeedback({ result }: { result: OiSearchResponse }) {
   if (result.status === 'empty') {
     return (
       <p className="muted">
-        Selecione a aeronave, informe o codigo ou tipo de missao e clique em Buscar OI.
+        Selecione a aeronave, informe o código ou tipo de missão e clique em Buscar OI.
       </p>
     );
   }
@@ -93,7 +93,7 @@ function OiSearchFeedback({ result }: { result: OiSearchResponse }) {
 
   const intro = result.status === 'single'
     ? 'Foi encontrada uma OI ativa.'
-    : 'A consulta retornou mais de uma opcao. Confira os dados abaixo antes de abrir o documento.';
+    : 'A consulta retornou mais de uma opção. Confira os dados abaixo antes de abrir o documento.';
 
   return (
     <section className="stack" aria-label="Resultado da consulta OI">
@@ -105,8 +105,8 @@ function OiSearchFeedback({ result }: { result: OiSearchResponse }) {
               <th>OI</th>
               <th>Programa</th>
               <th>Fase</th>
-              <th>Missoes</th>
-              <th>Paginas</th>
+              <th>Missões</th>
+              <th>Páginas</th>
               <th>Documento</th>
             </tr>
           </thead>
@@ -137,7 +137,7 @@ function OiResultRow({ item }: { item: OiSearchItem }) {
         <span className="muted">{item.subprogram}</span>
       </td>
       <td>{item.phaseId}</td>
-      <td>{item.missionCodes.length ? item.missionCodes.join(', ') : 'Sem lista de missoes'}</td>
+      <td>{item.missionCodes.length ? item.missionCodes.join(', ') : 'Sem lista de missões'}</td>
       <td>{formatPageRange(item.startPage, item.endPage)}</td>
       <td>
         {item.documentUrlValid ? (
@@ -145,10 +145,10 @@ function OiResultRow({ item }: { item: OiSearchItem }) {
             <a className="button secondary" href={item.driveUrl} target="_blank" rel="noopener noreferrer">
               Abrir OI
             </a>
-            <p className="muted compact">Abrir o documento nao registra ciencia.</p>
+            <p className="muted compact">Abrir o documento não registra ciência.</p>
           </>
         ) : (
-          <span className="muted">Link indisponivel</span>
+          <span className="muted">Link indisponível</span>
         )}
       </td>
     </tr>

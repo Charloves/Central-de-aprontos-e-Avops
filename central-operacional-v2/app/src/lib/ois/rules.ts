@@ -35,8 +35,8 @@ export function isValidOiDocumentUrl(value: string | null, environment = process
 }
 
 export function formatPageRange(startPage: number, endPage: number | null): string {
-  if (!Number.isInteger(startPage) || startPage < 1) return 'Pagina nao informada';
-  if (!Number.isInteger(endPage) || endPage === null || endPage < startPage) return `Pagina ${startPage}`;
-  if (endPage === startPage) return `Pagina ${startPage}`;
-  return `Paginas ${startPage} a ${endPage}`;
+  if (!Number.isInteger(startPage) || startPage < 1) return 'Página não informada';
+  if (!Number.isInteger(endPage) || endPage === null || endPage < startPage) return `Página ${startPage}`;
+  if (endPage === startPage) return `Página ${startPage}`;
+  return `Páginas ${startPage} a ${endPage}`;
 }

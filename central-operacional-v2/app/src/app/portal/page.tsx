@@ -18,8 +18,8 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
       <section className="panel">
         <div className="topbar">
           <div>
-            <p className="muted">Sessao V2 de homologacao</p>
-            <h1>Usuario {session.trigram}</h1>
+            <p className="muted">Sessão V2 de homologação</p>
+            <h1>Usuário {session.trigram}</h1>
           </div>
           <form action="/api/auth/logout" method="post">
             <button className="button secondary" type="submit">Sair</button>
@@ -28,40 +28,40 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
 
         {error === 'forbidden' ? (
           <p className="alert" role="alert">
-            A area administrativa exige perfil de coordenador ou administrador.
+            A área administrativa exige perfil de coordenador ou administrador.
           </p>
         ) : null}
 
         <p>
-          Esta tela ja usa sessao assinada em cookie HttpOnly. Os modulos reais serao conectados nas proximas etapas.
+          Esta tela já usa sessão assinada em cookie HttpOnly. Os módulos reais serão conectados nas próximas etapas.
         </p>
 
         <div className="grid">
           <article className="card">
             <h2>AVOP</h2>
-            <p>Listagem aplicavel ao perfil e registro de ciencia idempotente.</p>
+            <p>Listagem aplicável ao perfil e registro de ciência idempotente.</p>
             <Link href="/portal/avops">Abrir AVOPs</Link>
           </article>
           <article className="card">
             <h2>Aprontos</h2>
-            <p>Consulta de aprontos, justificativa e ciencia de material.</p>
+            <p>Consulta de aprontos, justificativa e ciência de material.</p>
             <Link href="/portal/aprontos">Abrir aprontos</Link>
           </article>
           <article className="card">
             <h2>OI</h2>
-            <p>Pesquisa por H50/H125, missao completa e fase.</p>
+            <p>Pesquisa por H50/H125, missão completa e fase.</p>
             <Link href="/portal/oi">Abrir OI</Link>
           </article>
           {hasAdminAccess(session) ? (
             <article className="card">
-              <h2>Administracao</h2>
-              <p>Area restrita a COORDINATOR e ADMIN.</p>
+              <h2>Administração</h2>
+              <p>Área restrita a COORDINATOR e ADMIN.</p>
               <div className="actions">
                 <Link href="/admin/dashboard">Dashboard</Link>
                 <Link href="/admin/auditoria">Auditoria nominal</Link>
                 <Link href="/admin/avops">Gerenciar AVOPs</Link>
                 <Link href="/admin/aprontos">Gerenciar aprontos</Link>
-                <Link href="/admin/roles">Transferencia</Link>
+                <Link href="/admin/roles">Transferência</Link>
               </div>
             </article>
           ) : null}

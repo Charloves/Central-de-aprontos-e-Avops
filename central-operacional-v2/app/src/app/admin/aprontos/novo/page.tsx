@@ -29,7 +29,7 @@ export default async function NewBriefingPage({ searchParams }: NewBriefingPageP
       <section className="panel">
         <div className="topbar">
           <div>
-            <p className="muted">Administracao de aprontos</p>
+            <p className="muted">Administração de aprontos</p>
             <h1>{briefing ? 'Editar apronto' : 'Novo apronto'}</h1>
             <p className="compact">Ator administrativo: <strong>{session.trigram}</strong>.</p>
           </div>
@@ -39,8 +39,8 @@ export default async function NewBriefingPage({ searchParams }: NewBriefingPageP
         </div>
 
         {saved ? <p className="success">Rascunho salvo.</p> : null}
-        {error ? <p className="alert" role="alert">Nao foi possivel salvar o rascunho.</p> : null}
-        {isPublished ? <p className="alert">Registro publicado nao pode ser alterado por esta tela.</p> : null}
+        {error ? <p className="alert" role="alert">Não foi possível salvar o rascunho.</p> : null}
+        {isPublished ? <p className="alert">Registro publicado não pode ser alterado por esta tela.</p> : null}
 
         <form className="stack" action="/api/admin/aprontos/save" method="post">
           {briefing ? <input type="hidden" name="draftId" value={briefing.id} /> : null}
@@ -49,11 +49,11 @@ export default async function NewBriefingPage({ searchParams }: NewBriefingPageP
             <input className="input" name="legacyId" defaultValue={briefing?.legacyId ?? ''} required maxLength={80} disabled={isPublished} />
           </label>
           <label>
-            Titulo
+            Título
             <input className="input" name="title" defaultValue={briefing?.title ?? ''} required maxLength={240} disabled={isPublished} />
           </label>
           <label>
-            Data de realizacao
+            Data de realização
             <input className="input" name="eventDate" type="date" defaultValue={briefing?.eventDate ?? todayIsoDate()} required disabled={isPublished} />
           </label>
           <label>
@@ -65,7 +65,7 @@ export default async function NewBriefingPage({ searchParams }: NewBriefingPageP
             <input className="input" name="driveFileId" defaultValue={briefing?.driveFileId ?? ''} maxLength={1000} disabled={isPublished} />
           </label>
           <label>
-            <input name="requiresMaterialAcknowledgement" type="checkbox" defaultChecked={briefing?.requiresMaterialAcknowledgement ?? false} disabled={isPublished} /> Exige ciencia de material
+            <input name="requiresMaterialAcknowledgement" type="checkbox" defaultChecked={briefing?.requiresMaterialAcknowledgement ?? false} disabled={isPublished} /> Exige ciência de material
           </label>
           <AudienceCheckboxes audiences={audiences} selected={briefing?.audiences ?? []} disabled={isPublished} />
           <button className="button" type="submit" disabled={isPublished}>Salvar rascunho</button>
@@ -78,7 +78,7 @@ export default async function NewBriefingPage({ searchParams }: NewBriefingPageP
 function AudienceCheckboxes({ audiences, selected, disabled }: { audiences: AdminAudience[]; selected: string[]; disabled: boolean }) {
   return (
     <fieldset className="card">
-      <legend>Publicos aplicaveis</legend>
+      <legend>Públicos aplicáveis</legend>
       <div className="actions">
         {audiences.map((audience) => (
           <label key={audience.id}>

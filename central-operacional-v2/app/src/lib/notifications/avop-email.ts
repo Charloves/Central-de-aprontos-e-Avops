@@ -264,7 +264,7 @@ export async function runAvopNotificationJob(input: {
         marker: decision.marker,
         result: permanent ? 'PERMANENT_ERROR' : 'TEMPORARY_ERROR',
         idempotencyKey: buildNotificationIdempotencyKey(candidate.avopId, candidate.profileId, decision.marker, permanent ? 'PERMANENT_ERROR' : 'TEMPORARY_ERROR'),
-        error: 'Falha ao processar notificacao de AVOP.',
+        error: 'Falha ao processar notificação de AVOP.',
         errorKind: permanent ? 'PERMANENT' : 'TEMPORARY',
         nextSendAt: permanent ? null : now,
         stopReason: permanent ? 'PERMANENT_EMAIL_ERROR' : null,

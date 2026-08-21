@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 async function handleCronRequest(request: Request) {
   const provided = extractCronSecret(request);
   if (!validateCronSecret({ provided, expected: process.env.CRON_SECRET })) {
-    return noStore(NextResponse.json({ error: 'Nao foi possivel processar a requisicao.' }, { status: 403 }));
+    return noStore(NextResponse.json({ error: 'Não foi possível processar a requisição.' }, { status: 403 }));
   }
 
   try {
@@ -32,7 +32,7 @@ async function handleCronRequest(request: Request) {
     });
     return noStore(NextResponse.json({ ok: true, dryRun, report }));
   } catch {
-    return noStore(NextResponse.json({ error: 'Nao foi possivel processar a requisicao.' }, { status: 500 }));
+    return noStore(NextResponse.json({ error: 'Não foi possível processar a requisição.' }, { status: 500 }));
   }
 }
 

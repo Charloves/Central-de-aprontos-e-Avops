@@ -31,23 +31,23 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
       <section className="panel">
         <div className="topbar">
           <div>
-            <p className="muted">Modulo Aprontos</p>
-            <h1>Aprontos aplicaveis</h1>
-            <p className="muted">Somente aprontos destinados aos seus publicos atuais sao exibidos.</p>
+            <p className="muted">Módulo Aprontos</p>
+            <h1>Aprontos aplicáveis</h1>
+            <p className="muted">Somente aprontos destinados aos seus públicos atuais são exibidos.</p>
           </div>
           <Link className="button secondary" href="/portal">Voltar ao portal</Link>
         </div>
 
-        {material === 'ok' ? <p className="success" role="status">Ciencia do material registrada.</p> : null}
+        {material === 'ok' ? <p className="success" role="status">Ciência do material registrada.</p> : null}
         {justification === 'ok' ? <p className="success" role="status">Justificativa registrada.</p> : null}
         {error ? (
           <p className="alert" role="alert">
-            Nao foi possivel concluir a acao. Confira se o apronto esta disponivel e tente novamente.
+            Não foi possível concluir a ação. Confira se o apronto está disponível e tente novamente.
           </p>
         ) : null}
 
         {briefings.length === 0 ? (
-          <p className="muted">Nenhum apronto aplicavel encontrado para seu perfil atual.</p>
+          <p className="muted">Nenhum apronto aplicável encontrado para seu perfil atual.</p>
         ) : (
           <div className="table-wrap">
             <table>
@@ -55,11 +55,11 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
                 <tr>
                   <th>Apronto</th>
                   <th>Data</th>
-                  <th>Publico</th>
-                  <th>Situacao</th>
-                  <th>Minha situacao</th>
+                  <th>Público</th>
+                  <th>Situação</th>
+                  <th>Minha situação</th>
                   <th>Material</th>
-                  <th>Acoes</th>
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -73,8 +73,8 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
                         <br />
                         <span className="muted">{briefing.title}</span>
                       </td>
-                      <td>{briefing.eventDate ? formatDate(briefing.eventDate) : 'Data invalida'}</td>
-                      <td>{briefing.audiences.join(', ') || 'Nao definido'}</td>
+                      <td>{briefing.eventDate ? formatDate(briefing.eventDate) : 'Data inválida'}</td>
+                      <td>{briefing.audiences.join(', ') || 'Não definido'}</td>
                       <td>
                         <span className={briefing.effectiveStatus === 'OPEN' ? 'badge ok' : 'badge pending'}>
                           {getBriefingStatusLabel(briefing.status, briefing.effectiveStatus)}
@@ -91,7 +91,7 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
                             Abrir material
                           </a>
                         ) : (
-                          <span className="muted">Material indisponivel</span>
+                          <span className="muted">Material indisponível</span>
                         )}
                       </td>
                       <td>
@@ -104,7 +104,7 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
                             maxLength={MAX_JUSTIFICATION_LENGTH}
                             minLength={MIN_JUSTIFICATION_LENGTH}
                             name="text"
-                            placeholder="Ex.: escala, missao ou atendimento"
+                            placeholder="Ex.: escala, missão ou atendimento"
                             disabled={!state.canJustify}
                           />
                           <button className="button secondary" type="submit" disabled={!state.canJustify}>
@@ -120,12 +120,12 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
                               <input type="hidden" name="briefingId" value={briefing.id} />
                               <p className="muted compact">Confirmo que consultei o material deste apronto.</p>
                               <button className="button" type="submit" disabled={!state.canAcknowledgeMaterial}>
-                                Registrar ciencia do material
+                                Registrar ciência do material
                               </button>
                             </form>
                           )
                         ) : (
-                          <p className="muted compact">Este apronto nao exige ciencia formal do material.</p>
+                          <p className="muted compact">Este apronto não exige ciência formal do material.</p>
                         )}
                       </td>
                     </tr>
