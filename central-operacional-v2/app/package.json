@@ -20,6 +20,7 @@
     "supabase:db:push:dry-run": "node --experimental-strip-types scripts/safe-supabase-dry-run.ts",
     "supabase:types:dev": "node --experimental-strip-types scripts/generate-supabase-types.ts",
     "supabase:validate:dev": "node --experimental-strip-types scripts/validate-supabase-dev.ts",
+    "production:check": "node --experimental-strip-types scripts/validate-production-env.ts",
     "gmail:oauth:check": "node --experimental-strip-types scripts/gmail-oauth-local.ts --check",
     "gmail:oauth:local": "node --experimental-strip-types scripts/gmail-oauth-local.ts --authorize",
     "gmail:test:send": "node --conditions=react-server --experimental-strip-types scripts/gmail-test-send.ts"
