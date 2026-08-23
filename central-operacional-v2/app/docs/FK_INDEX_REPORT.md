@@ -45,3 +45,20 @@ Nenhuma FK da lista confirmada foi excluída. As demais FKs do schema `public` j
 ## Estratégia
 
 `supabase/migrations/0007_add_foreign_key_indexes.sql` cria somente índices B-tree comuns no lado referenciador das FKs confirmadas. A migration usa `CREATE INDEX IF NOT EXISTS`, qualifica tabelas com `public`, não usa `CONCURRENTLY` e não altera RLS, policies, grants, funções, constraints, dados, índices existentes ou schemas internos do Supabase.
+
+## Complemento para `notification_log.profile_id`
+
+Após a homologação da engine de notificações de AVOP, o Performance Advisor passou a apontar a FK `notification_log_profile_id_fkey` como sem índice de apoio. O catálogo PostgreSQL confirmou que `notification_log.profile_id` existe como FK e que os índices existentes em `notification_log` não têm `profile_id` como prefixo inicial:
+
+- `notification_log_activity_marker_idx` cobre `(activity_type, activity_id, profile_id, marker, result)`, portanto não atende consultas ou verificações iniciadas por `profile_id`;
+- `notification_log_schedule_id_idx` cobre apenas `schedule_id`;
+- a PK e o índice de idempotência cobrem `id` e `idempotency_key`.
+
+`supabase/migrations/20260823000237_add_notification_log_profile_id_index.sql` corrige exclusivamente esse achado com um índice B-tree comum:
+
+```sql
+create index if not exists notification_log_profile_id_idx
+  on public.notification_log using btree (profile_id);
+```
+
+A migration não usa `CONCURRENTLY`, não altera FK, tabela, dados, RLS, policies, grants, funções ou índices existentes.
