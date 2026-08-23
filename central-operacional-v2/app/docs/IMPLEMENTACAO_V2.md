@@ -285,11 +285,11 @@ Na homologação, `SUPABASE_TARGET_ENV` permanece `development`, `AVOP_EMAIL_MOD
 
 O cron de AVOP é declarado em `vercel.json` como `0 11 * * *`, pois a Vercel usa UTC e esse horário corresponde a 08:00 em `America/Sao_Paulo` no fuso atual UTC-3. Preview Deployments não disparam Cron Jobs automaticamente, mas o endpoint continua protegido por `CRON_SECRET` para chamadas manuais de homologação.
 
-Pendência antes de produção: criar índice de apoio para `notification_log.profile_id` em migration própria, caso o volume de notificações justifique e antes de tráfego real.
+Correção de performance antes de produção: a migration `20260823000237_add_notification_log_profile_id_index.sql` adiciona o índice B-tree `notification_log_profile_id_idx` para a FK `notification_log.profile_id`, conforme achado do Performance Advisor. A correção é isolada: não altera dados, RLS, grants, policies, funções, constraints nem índices existentes.
 
 Enquanto o app OAuth do Google estiver em Testing, autorizacoes com o escopo Gmail expiram em 7 dias, inclusive refresh tokens emitidos com acesso offline. Para uso duradouro, o app deve passar para Production apos a revisao do consent screen, dominio, justificativa do escopo `gmail.send` e requisitos de verificacao aplicaveis.
 
-Pendencia antes de producao: o Performance Advisor apontou `notification_log.profile_id` sem indice de apoio. Essa correcao deve ser feita em migration propria antes da carga operacional, sem remover indices classificados como nao utilizados ate haver trafego representativo.
+Pendência operacional: índices classificados como `unused_index` não devem ser removidos até haver tráfego representativo e evidência de workload.
 
 ## Módulo Apronto inicial
 
