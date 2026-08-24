@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migration = readFileSync(
   resolve(__dirname, '../../../supabase/migrations/0006_protect_public_default_privileges.sql'),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 const previousMigrations = [
   '0001_initial_schema.sql',
