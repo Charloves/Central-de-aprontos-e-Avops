@@ -32,7 +32,7 @@ export class SupabaseProfileAdminRepository implements ProfileAdminRepository {
   async listProfiles(): Promise<AdminProfileSummary[]> {
     const { data, error } = await this.client
       .from('profiles')
-      .select('id,trigram,name,email,active,profile_roles(role),profile_audiences(audiences(code,active))')
+      .select('id,trigram,name,email,active,profile_roles!profile_roles_profile_id_fkey(role),profile_audiences!profile_audiences_profile_id_fkey(audiences!profile_audiences_audience_id_fkey(code,active))')
       .order('name', { ascending: true })
       .returns<ProfileRow[]>();
 
