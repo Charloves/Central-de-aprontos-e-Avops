@@ -9,6 +9,13 @@ const migrationPath = join(
   '20260824183336_profile_admin_bootstrap.sql',
 );
 const sql = readFileSync(migrationPath, 'utf8');
+const ambiguityFixPath = join(
+  process.cwd(),
+  'supabase',
+  'migrations',
+  '20260901005200_fix_profile_audience_code_ambiguity.sql',
+);
+const ambiguityFixSql = readFileSync(ambiguityFixPath, 'utf8');
 
 describe('profile admin bootstrap migration contract', () => {
   it('creates the first admin bootstrap and profile admin RPCs with stable signatures', () => {
@@ -65,6 +72,20 @@ describe('profile admin bootstrap migration contract', () => {
       const content = readFileSync(join(process.cwd(), 'supabase', 'migrations', name), 'utf8');
       expect(content.length).toBeGreaterThan(100);
     }
+  });
+
+  it('fixes audience code normalization without changing the public RPC contract', () => {
+    expect(ambiguityFixSql).toContain('create or replace function internal.normalize_profile_audience_codes(p_codes text[])');
+    expect(ambiguityFixSql).toContain('security invoker');
+    expect(ambiguityFixSql).toContain('set search_path = pg_catalog, pg_temp');
+    expect(ambiguityFixSql).toContain('array_agg(distinct n.code order by n.code)');
+    expect(ambiguityFixSql).toContain('from unnest(v_codes) as requested_code');
+    expect(ambiguityFixSql).toContain('left join public.audiences a on a.code = requested_code and a.active');
+    expect(ambiguityFixSql).toContain('revoke all on function internal.normalize_profile_audience_codes(text[]) from public, anon, authenticated;');
+    expect(ambiguityFixSql).toContain('grant execute on function internal.normalize_profile_audience_codes(text[]) to service_role;');
+    expect(ambiguityFixSql).not.toContain('create table');
+    expect(ambiguityFixSql).not.toContain('alter table');
+    expect(ambiguityFixSql).not.toContain('create policy');
   });
 });
 
