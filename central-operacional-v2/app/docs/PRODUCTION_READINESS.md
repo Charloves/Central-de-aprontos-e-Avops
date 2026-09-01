@@ -80,6 +80,34 @@ Nunca configurar segredos como `NEXT_PUBLIC_*`.
 7. Executar Security Advisor e Performance Advisor após as migrations.
 8. Validar RLS, grants, RPCs, cron e logs antes de liberar usuários.
 
+## Bootstrap do primeiro administrador
+
+Após aplicar as migrations em produção e antes de liberar usuários, criar exatamente um primeiro administrador pelo script server-only:
+
+```powershell
+npm run production:bootstrap-admin
+```
+
+O script é idempotente e falha fechado quando:
+
+- `APP_ENV` não é exatamente `production`;
+- `SUPABASE_TARGET_ENV` não é exatamente `production`;
+- `SUPABASE_URL` não corresponde a `SUPABASE_PRODUCTION_PROJECT_REF`;
+- `SUPABASE_PRODUCTION_PROJECT_REF` coincide com `SUPABASE_DEV_PROJECT_REF`;
+- `SUPABASE_SECRET_KEY` não usa a chave moderna `sb_secret_...`;
+- já existe perfil ativo com `ADMIN`.
+
+Entradas do primeiro administrador devem ser fornecidas somente por ambiente local seguro ou mecanismo operacional equivalente:
+
+- `BOOTSTRAP_ADMIN_TRIGRAM`;
+- `BOOTSTRAP_ADMIN_NAME`;
+- `BOOTSTRAP_ADMIN_EMAIL`;
+- `BOOTSTRAP_ADMIN_AUDIENCES`, com códigos separados por vírgula.
+
+Esses valores não devem ser enviados por chat, não devem ser gravados em Git, não devem ser impressos em logs e não substituem o `seed.sql`. O script chama a RPC `bootstrap_first_admin`, que cria o perfil com `USER`, `COORDINATOR` e `ADMIN`, associa públicos válidos e registra auditoria nominal.
+
+Depois do bootstrap, a gestão ordinária de perfis ocorre apenas em `/admin/perfis`. Essa tela exige `ADMIN`, não concede `ADMIN` e não remove o último administrador ativo. Concessão ou transferência de `ADMIN` permanece restrita ao fluxo de transferência administrativa existente.
+
 ## Migrations
 
 Aplicar somente as migrations versionadas, em ordem, usando o fluxo controlado da Supabase CLI contra o projeto de produção. Não usar `db reset`, `repair`, `pull` ou SQL Editor para contornar falhas sem diagnóstico.
@@ -114,7 +142,7 @@ Após deploy e migrations:
 
 1. Acessar `/` e validar carregamento sem erro.
 2. Login com perfil administrativo autorizado.
-3. Validar `/portal`, `/admin`, `/admin/dashboard` e `/admin/auditoria`.
+3. Validar `/portal`, `/admin`, `/admin/dashboard`, `/admin/auditoria` e `/admin/perfis`.
 4. Validar AVOP, Apronto e OI somente com dados de produção aprovados.
 5. Confirmar cookie `HttpOnly`, `Secure`, `SameSite=Lax` e opaco.
 6. Testar logout e revogação de sessão.

@@ -10,7 +10,7 @@ const migration = readFileSync(
     '../../../supabase/migrations/20260823000237_add_notification_log_profile_id_index.sql',
   ),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 const previousMigrations = [
   '0001_initial_schema.sql',

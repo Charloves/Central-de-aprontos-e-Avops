@@ -516,3 +516,39 @@ Banco:
 - `public.transfer_management_roles(uuid, text, timestamptz)` e apenas um wrapper backend-only para chamada via Supabase Data API, ja que o schema `internal` nao e exposto ao PostgREST;
 - `PUBLIC`, `anon` e `authenticated` nao recebem `EXECUTE`; somente `service_role` pode chamar;
 - `audit_log.action = MANAGEMENT_ROLES_TRANSFERRED` preserva o historico real das transferencias, sem gravar trigrama em metadata.
+
+## Bootstrap e gestão de perfis
+
+A produção não usa `seed.sql`. O primeiro administrador deve ser criado uma única vez pelo script server-only `production:bootstrap-admin`, após aplicação das migrations no projeto de produção vazio.
+
+Contrato do bootstrap:
+
+- exige `APP_ENV=production` e `SUPABASE_TARGET_ENV=production`;
+- valida que `SUPABASE_URL` corresponde a `SUPABASE_PRODUCTION_PROJECT_REF`;
+- recusa execução se o project ref de produção coincidir com o project ref de development;
+- usa somente `SUPABASE_SECRET_KEY` no backend;
+- recebe trigrama, nome, e-mail e públicos por variáveis operacionais locais, sem imprimir valores;
+- cria `USER`, `COORDINATOR` e `ADMIN` apenas se ainda não existir administrador ativo;
+- registra `PROFILE_BOOTSTRAP_ADMIN_CREATED` em `audit_log`.
+
+A gestão ordinária de perfis fica em `/admin/perfis` e `/admin/perfis/novo`.
+
+Regras:
+
+- somente sessão ativa com papel atual `ADMIN`, recarregado do banco, pode criar, editar, ativar, inativar, alterar públicos ou alterar papéis permitidos;
+- `COORDINATOR` pode acessar áreas administrativas existentes, mas não altera perfis;
+- o ator vem exclusivamente da sessão server-side;
+- campos como `actor_profile_id`, `assigned_by`, trigrama do ator ou `session_id` enviados pelo navegador são rejeitados;
+- a tela comum não concede `ADMIN`; esse papel permanece restrito ao fluxo de transferência administrativa;
+- o último `ADMIN` ativo não pode ser inativado;
+- alterações de ativação ou papéis revogam imediatamente sessões persistentes do perfil afetado;
+- toda mudança registra auditoria nominal em `audit_log`;
+- mutações usam CSRF fail-closed por `APP_ORIGIN`;
+- `PUBLIC`, `anon` e `authenticated` não recebem `EXECUTE` nas RPCs; somente `service_role`.
+
+Banco:
+
+- `public.bootstrap_first_admin(text, text, text, text[], timestamptz)` executa o bootstrap único;
+- `public.admin_save_profile(uuid, uuid, jsonb, timestamptz)` executa criação/edição transacional;
+- ambas usam advisory transaction locks, validação server-side e `search_path` fixo;
+- a migration é local até aplicação autorizada em produção.
