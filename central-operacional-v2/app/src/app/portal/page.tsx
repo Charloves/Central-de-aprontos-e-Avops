@@ -62,6 +62,7 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
                 <Link href="/admin/perfis">Gerenciar perfis</Link>
                 <Link href="/admin/avops">Gerenciar AVOPs</Link>
                 <Link href="/admin/aprontos">Gerenciar aprontos</Link>
+                <Link href="/admin/importacao">Importar dados legados</Link>
                 <Link href="/admin/roles">Transferência</Link>
               </div>
             </article>

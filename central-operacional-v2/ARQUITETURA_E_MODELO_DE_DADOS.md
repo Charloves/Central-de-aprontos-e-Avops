@@ -449,3 +449,29 @@ Preserva linhas historicas que nao podem ser gravadas com seguranca em tabelas d
 Regra adicional de auditoria historica:
 
 - usar staging de importacao historica para linhas ambiguas, invalidas ou duplicadas que precisem ser preservadas sem alterar o significado do dado.
+
+## Fluxo administrativo de importacao legada
+
+A rota `/admin/importacao` centraliza o recebimento controlado de arquivos legados CSV ou JSON. Ela e restrita a `ADMIN`, com identidade derivada exclusivamente da sessao server-side, validacao de Origin/CSRF e uso de `SUPABASE_SECRET_KEY` apenas em modulos `server-only`.
+
+Fases do fluxo:
+
+- recebimento do arquivo com limite de tipo, extensao e tamanho;
+- parse sem executar formulas, macros, comandos ou conteudo ativo;
+- validacao contra referencias atuais de perfis, publicos, AVOPs, aprontos e OIs;
+- classificacao entre validos, invalidos, duplicados, ambiguos e pendentes de decisao humana;
+- preview sanitizado sem escrita operacional;
+- confirmacao explicita vinculada a token opaco `HttpOnly` e hash server-side do arquivo validado;
+- aplicacao transacional por RPC, com bloqueio do lote e auditoria nominal;
+- relatorio final sanitizado para validos, rejeitados, duplicados e pendentes.
+
+O preview pode gravar somente `historical_import_batches` e `historical_import_staging_records`. Tabelas operacionais so podem ser modificadas pela RPC `public.admin_apply_legacy_import_batch(uuid, uuid, text, timestamptz)`, que revalida administrador, status do lote, token de confirmacao e ausencia de inconsistencias bloqueantes dentro da mesma transacao.
+
+Regras de preservacao:
+
+- importacao nao cria nem concede `ADMIN`;
+- importacao nao altera administrador existente;
+- importacao nao cria sessoes, cookies, tokens ou credenciais;
+- conteudo do arquivo e tratado como nao confiavel e amostras de relatorio sao sanitizadas;
+- linhas ambiguas ou com referencias ausentes permanecem no staging para resolucao posterior;
+- registros historicos existentes e snapshots ja publicados nao sao reconstruidos nem sobrescritos silenciosamente.
