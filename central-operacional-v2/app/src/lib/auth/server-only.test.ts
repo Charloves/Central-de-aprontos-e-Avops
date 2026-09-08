@@ -17,6 +17,7 @@ describe('server-only boundaries', () => {
     join(srcDir, 'lib', 'dashboard', 'supabase-dashboard-repository.ts'),
     join(srcDir, 'lib', 'admin', 'supabase-publication-repository.ts'),
     join(srcDir, 'lib', 'admin', 'supabase-profile-admin-repository.ts'),
+    join(srcDir, 'lib', 'admin', 'supabase-legacy-import-repository.ts'),
     join(srcDir, 'lib', 'notifications', 'supabase-avop-notification-repository.ts'),
     join(srcDir, 'lib', 'notifications', 'gmail-avop-email-sender.ts'),
   ])('marca modulo sensivel como server-only: %s', (filePath) => {

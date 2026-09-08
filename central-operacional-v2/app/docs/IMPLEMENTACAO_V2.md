@@ -360,6 +360,23 @@ Linhas ambiguas de `PRESENCAS`, como registros sem status, justificativa ou cien
 
 A identidade do lote usa `source_file_hash`, obrigatorio, calculado futuramente pelo importador como SHA-256 dos bytes exatos do arquivo de origem. A migration usa indice unico com `coalesce(source_reference, '')` para impedir lote duplicado mesmo quando nao houver referencia externa.
 
+O fluxo administrativo definitivo fica em `/admin/importacao` e exige papel `ADMIN` recarregado da sessao server-side. A etapa de preview grava apenas `historical_import_batches` e `historical_import_staging_records`; nenhuma tabela operacional e modificada antes da confirmacao explicita. A confirmacao usa token opaco em cookie `HttpOnly`, persistindo no banco somente o hash SHA-256 do token. Alterar arquivo ou tipo de importacao gera outro hash de validacao e invalida a confirmacao anterior.
+
+A aplicacao definitiva usa `public.admin_apply_legacy_import_batch(uuid, uuid, text, timestamptz)` em transacao unica. A RPC bloqueia o lote com `FOR UPDATE`, revalida administrador, status, token e inconsistencias, aplica somente registros `valid`, marca staging como `imported` e registra `LEGACY_IMPORT_APPLIED` no `audit_log` com metadados sanitizados. Repeticao do mesmo lote ja aplicado retorna resultado idempotente; concorrencia sobre o mesmo lote serializa pelo lock da linha.
+
+`supabase/migrations/20260902000200_fix_legacy_import_advisor_indexes.sql` complementa a migration administrativa com os dois indices B-tree exigidos pelo Performance Advisor para `historical_import_batches.applied_by` e `historical_import_batches.canceled_by`. Ela tambem remove o indice de status duplicado criado inicialmente pelo lote, sem alterar dados, RLS, grants, policies, funcoes ou constraints.
+
+Regras de seguranca da importacao:
+
+- apenas `ADMIN` inicia, cancela ou aplica lotes;
+- o ator vem exclusivamente da sessao, nunca do formulario;
+- `ADMIN` nao e criado ou concedido por importacao;
+- administrador existente nao e alterado por importacao;
+- sessoes, cookies, tokens e credenciais nunca sao importados;
+- CSV/JSON sao tratados como conteudo nao confiavel, sem executar formula, macro ou conteudo ativo;
+- relatorios exibem apenas amostras sanitizadas e redigem nome, e-mail, trigrama, justificativas e campos sensiveis;
+- registros invalidos, duplicados, ambiguos ou com referencia inexistente bloqueiam a aplicacao ate decisao humana.
+
 A resolucao futura deve ser feita por coordenador/admin: o registro definitivo pode ser criado ou vinculado e, depois disso, o staging recebe `resolved_entity_type`, `resolved_entity_id`, `resolved_by`, `resolved_at` e `resolution_notes`. O JSON original nao deve ser apagado nem alterado. O banco bloqueia update de `original_content` por trigger.
 
 ## Logs legados
