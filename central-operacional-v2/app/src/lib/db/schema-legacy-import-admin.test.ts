@@ -9,6 +9,11 @@ const advisorMigrationPath = join(
   'supabase/migrations/20260902000200_fix_legacy_import_advisor_indexes.sql',
 );
 const advisorSql = readFileSync(advisorMigrationPath, 'utf8');
+const resolutionFixMigrationPath = join(
+  process.cwd(),
+  'supabase/migrations/20260908153651_fix_legacy_import_resolution_metadata.sql',
+);
+const resolutionFixSql = readFileSync(resolutionFixMigrationPath, 'utf8');
 
 describe('legacy import admin migration contract', () => {
   it('adds confirmation state without changing previous migrations', () => {
@@ -71,5 +76,18 @@ describe('legacy import admin migration contract', () => {
     expect(advisorSql).toContain('drop index if exists public.historical_import_batches_admin_status_idx;');
     expect(advisorSql).not.toMatch(/create\s+index\s+concurrently/i);
     expect(advisorSql).not.toMatch(/alter\s+table|create\s+policy|grant\s+|revoke\s+|insert\s+into|update\s+|delete\s+from|truncate\s+table/i);
+  });
+
+  it('corrects applied staging rows with complete resolution metadata', () => {
+    expect(resolutionFixSql).toContain('create or replace function public.admin_apply_legacy_import_batch(');
+    expect(resolutionFixSql).toContain('set search_path = pg_catalog, pg_temp');
+    expect(resolutionFixSql).toContain('resolved_entity_type = v_resolved_entity_type');
+    expect(resolutionFixSql).toContain('resolved_entity_id = v_resolved_entity_id');
+    expect(resolutionFixSql).toContain('resolved_at = p_now');
+    expect(resolutionFixSql).toContain('resolved_by = p_actor_profile_id');
+    expect(resolutionFixSql).toContain("raise exception 'legacy import record did not resolve to an entity'");
+    expect(resolutionFixSql).toContain('revoke all on function public.admin_apply_legacy_import_batch(uuid, uuid, text, timestamptz) from public, anon, authenticated;');
+    expect(resolutionFixSql).toContain('grant execute on function public.admin_apply_legacy_import_batch(uuid, uuid, text, timestamptz) to service_role;');
+    expect(resolutionFixSql).not.toMatch(/create\s+policy|drop\s+table|truncate\s+table|delete\s+from/i);
   });
 });
