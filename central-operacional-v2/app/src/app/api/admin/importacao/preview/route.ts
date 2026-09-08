@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
-      path: '/admin/importacao',
+      path: '/api/admin/importacao',
       maxAge: 30 * 60,
     });
     response.headers.set('Cache-Control', 'no-store');

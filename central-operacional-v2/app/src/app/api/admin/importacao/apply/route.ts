@@ -37,7 +37,12 @@ export async function POST(request: Request) {
     if (!result.ok) return failure(request);
 
     const response = NextResponse.redirect(new URL('/admin/importacao?applied=1', request.url), { status: 303 });
-    response.cookies.delete(LEGACY_IMPORT_CONFIRMATION_COOKIE);
+    response.cookies.set({
+      name: LEGACY_IMPORT_CONFIRMATION_COOKIE,
+      value: '',
+      path: '/api/admin/importacao',
+      maxAge: 0,
+    });
     response.headers.set('Cache-Control', 'no-store');
     return response;
   } catch {

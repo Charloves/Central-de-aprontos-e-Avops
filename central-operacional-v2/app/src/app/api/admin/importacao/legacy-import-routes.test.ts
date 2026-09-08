@@ -21,8 +21,17 @@ describe('legacy import admin routes contract', () => {
 
     expect(preview).toContain('httpOnly: true');
     expect(preview).toContain("sameSite: 'lax'");
+    expect(preview).toContain("path: '/api/admin/importacao'");
     expect(apply).toContain('decodeConfirmationCookie');
     expect(apply).not.toContain("formData.get('confirmation");
+  });
+
+  it('expires the confirmation cookie using the same API path after apply or cancel', () => {
+    for (const route of ['apply/route.ts', 'cancel/route.ts']) {
+      const source = readFileSync(join(routeDir, route), 'utf8');
+      expect(source).toContain("path: '/api/admin/importacao'");
+      expect(source).toContain('maxAge: 0');
+    }
   });
 
   it('returns only a sanitized report download for ADMIN sessions', () => {
