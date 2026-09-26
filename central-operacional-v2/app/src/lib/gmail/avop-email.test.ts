@@ -6,7 +6,7 @@ const gmailMock = vi.hoisted(() => {
   const setCredentials = vi.fn();
   const send = vi.fn();
   const oauth2Instances: Array<{ clientId: string; clientSecret: string }> = [];
-  const OAuth2 = vi.fn((clientId: string, clientSecret: string) => {
+  const OAuth2 = vi.fn(function OAuth2(clientId: string, clientSecret: string) {
     oauth2Instances.push({ clientId, clientSecret });
     return { setCredentials };
   });
