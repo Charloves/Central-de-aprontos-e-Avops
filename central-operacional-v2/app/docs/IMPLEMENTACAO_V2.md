@@ -314,13 +314,13 @@ Regras implementadas:
 - o fechamento efetivo ocorre no início do quarto dia após a data de realização, em `America/Sao_Paulo`;
 - enquanto o job automático não existir, o servidor calcula esse fechamento a cada requisição e não depende apenas do status persistido;
 - a ciência de material é idempotente por `(briefing_id, profile_id)` em `briefing_records` e preserva o primeiro `recorded_at`;
-- se não houver registro anterior, a ciência de material cria `attendance_status = PENDENTE`, sem inventar presença ou falta;
+- após `20260926133202_support_material_ack_without_attendance.sql`, se não houver registro anterior, a ciência de material cria `attendance_status = NULL`, sem usar um estado sentinela nem inventar presença ou falta;
 - justificativas são registradas em `absence_justifications`, sem transformar justificativa em presença;
 - nova justificativa enquanto o apronto estiver aberto cria novo registro e preserva histórico; a interface exibe a mais recente;
 - registros legados vazios ou ambíguos são exibidos sem serem reinterpretados como presença, falta, justificativa ou ciência;
 - presença fica somente como leitura histórica nesta primeira versão. O usuário comum não recebe ação para se declarar `PRESENTE`.
 
-Limitação atual: o schema possui `material_acknowledged` e `recorded_at` em `briefing_records`, mas não possui timestamp separado para a ciência de material. Nesta primeira versão, o primeiro `recorded_at` do registro é preservado para idempotência. Se a auditoria exigir separar presença e ciência de material no futuro, será necessária migration própria.
+O schema possui `material_acknowledged` e `recorded_at` em `briefing_records`, mas não possui timestamp separado para a ciência de material. O primeiro `recorded_at` do registro é preservado para idempotência. Se a auditoria exigir separar presença e ciência de material no futuro, será necessária migration própria.
 
 ## Fechamento automático de aprontos
 
@@ -356,7 +356,7 @@ O estado efetivo calculado pela aplicação continua bloqueando ações no prazo
 
 `supabase/migrations/0003_historical_import_staging.sql` cria uma estrutura generica para lotes de importacao e registros historicos em staging.
 
-Linhas ambiguas de `PRESENCAS`, como registros sem status, justificativa ou ciencia de material, nao sao preparadas para `briefing_records`, pois `briefing_records.attendance_status` permanece `NOT NULL`. Nesses casos o dry-run gera uma operacao `stage`, preservando o conteudo original, o conteudo normalizado parcial, os warnings e a razao da limitacao.
+Após `20260926133202_support_material_ack_without_attendance.sql`, linhas de `PRESENCAS` que registram somente ciência de material são importáveis com `attendance_status = NULL`. Linhas realmente vazias, com status desconhecido ou com conflito entre presença e justificativa continuam em `stage`, preservando o conteúdo original e exigindo decisão humana. Um lote com staging não resolvido permanece fail-closed; para aplicar os registros seguros, deve-se gerar um arquivo operacional separado sem alterar o arquivo-fonte nem silenciar as pendências.
 
 A identidade do lote usa `source_file_hash`, obrigatorio, calculado futuramente pelo importador como SHA-256 dos bytes exatos do arquivo de origem. A migration usa indice unico com `coalesce(source_reference, '')` para impedir lote duplicado mesmo quando nao houver referencia externa.
 

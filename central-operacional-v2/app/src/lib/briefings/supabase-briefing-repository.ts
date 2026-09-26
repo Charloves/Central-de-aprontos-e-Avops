@@ -30,7 +30,7 @@ type BriefingRecordRow = {
   id: string;
   briefing_id: string;
   profile_id: string;
-  attendance_status: string;
+  attendance_status: string | null;
   material_acknowledged: boolean;
   recorded_at: string;
 };
@@ -107,7 +107,7 @@ export class SupabaseBriefingRepository implements BriefingRepository {
       .insert({
         briefing_id: briefingId,
         profile_id: profileId,
-        attendance_status: 'PENDENTE',
+        attendance_status: null,
         material_acknowledged: true,
         recorded_at: now.toISOString(),
         legacy_source: {},

@@ -23,7 +23,7 @@ export type DashboardAvopRecord = {
 export type DashboardBriefingRecord = {
   briefingId: string;
   profileId: string;
-  attendanceStatus: string;
+  attendanceStatus: string | null;
   materialAcknowledged: boolean;
   recordedAt: string;
 };

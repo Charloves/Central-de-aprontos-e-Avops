@@ -170,7 +170,9 @@ Campos finais vazios sao preservados e nao sao tratados automaticamente como err
 
 A chave idempotente da presenca e formada por apronto normalizado e trigrama normalizado. Quando houver duplicidade na mesma chave, o dry-run preserva o primeiro registro valido, reporta `DUPLICATE_ROW` e mantem a linha original duplicada nos problemas para auditoria.
 
-Quando uma linha tiver `APRONTO_ID` e `ID`, mas nao tiver `STATUS`, justificativa ou ciencia de material, o importador nao inventa presenca, falta ou justificativa. A linha gera uma operacao `stage`, com classificacao `ambiguous`, para futura analise manual.
+Quando uma linha tiver `APRONTO_ID` e `ID`, mas não tiver `STATUS`, justificativa ou ciência de material, o importador não inventa presença, falta ou justificativa. A linha gera uma operação `stage`, com classificação `ambiguous`, para futura análise manual.
+
+Uma linha sem `STATUS`, mas com `CIENCIA_MATERIAL = SIM`, é válida e cria ou atualiza apenas a ciência de material, mantendo `attendance_status = NULL`. Status desconhecido e combinações conflitantes, como `PRESENTE` com justificativa, permanecem em staging para decisão humana. O classificador não reinterpreta payloads já destinados ao staging como registros operacionais e, por isso, não gera falsos erros de referência nesses casos.
 
 Duplicidades historicas de `PRESENCAS` tambem geram operacao `stage` com classificacao `duplicate`, alem do issue `DUPLICATE_ROW`. Isso permite preservar o registro original sem duplicar a escrita futura em `briefing_records`.
 

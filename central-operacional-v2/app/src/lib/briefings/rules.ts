@@ -34,6 +34,7 @@ export function getBriefingStatusLabel(status: BriefingStatus, effectiveStatus: 
 
 export function getAttendanceLabel(record: BriefingListItem['record']): string {
   if (!record) return 'Sem registro';
+  if (!record.attendanceStatus?.trim()) return 'Sem registro';
   if (record.attendanceStatus === 'PRESENTE') return 'Presente';
   if (record.attendanceStatus === 'AUSENTE') return 'Falta';
   if (record.attendanceStatus === 'JUSTIFICADO') return 'Justificado';

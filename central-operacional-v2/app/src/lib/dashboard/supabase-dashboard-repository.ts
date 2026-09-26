@@ -77,7 +77,7 @@ type AvopAcknowledgementRow = {
 type BriefingRecordRow = {
   briefing_id: string;
   profile_id: string;
-  attendance_status: string;
+  attendance_status: string | null;
   material_acknowledged: boolean;
   recorded_at: string;
 };

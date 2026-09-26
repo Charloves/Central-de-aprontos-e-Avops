@@ -442,7 +442,7 @@ Controla lotes de importacao historica. `source_file_hash` e obrigatorio e deve 
 - `created_at`
 - `updated_at`
 
-Preserva linhas historicas que nao podem ser gravadas com seguranca em tabelas definitivas. Exemplo: presenca sem `STATUS`, sem justificativa e sem ciencia de material. Nesses casos, o importador nao inventa `attendance_status`; a linha vai para staging e pode ser resolvida posteriormente por coordenador, mantendo o JSON original intacto.
+Preserva linhas históricas que não podem ser gravadas com segurança em tabelas definitivas. Exemplo: presença sem `STATUS`, sem justificativa e sem ciência de material, ou `PRESENTE` acompanhado de justificativa conflitante. Nesses casos, o importador não inventa `attendance_status`; a linha vai para staging e pode ser resolvida posteriormente por coordenador, mantendo o JSON original intacto. Ciência de material isolada é representada em `briefing_records` com `attendance_status = NULL`, sem transformar ciência em presença ou falta.
 
 `original_content` e imutavel por trigger no banco. A resolucao futura deve alterar apenas classificacao, campos de resolucao, referencia definitiva, auditoria e metadados permitidos.
 
