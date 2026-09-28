@@ -70,7 +70,7 @@ export class FakeBriefingRepository implements BriefingRepository {
       id: `briefing-record-${this.records.size + 1}`,
       briefingId,
       profileId,
-      attendanceStatus: 'PENDENTE',
+      attendanceStatus: null,
       materialAcknowledged: true,
       recordedAt: now.toISOString(),
     };

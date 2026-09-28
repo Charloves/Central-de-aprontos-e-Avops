@@ -84,12 +84,39 @@ describe('legacy import administration', () => {
     expect(classified.issues.map((issue) => issue.code)).toContain('ADMIN_PROFILE_PROTECTED');
   });
 
-  it('detects missing references and ambiguous presence rows', () => {
+  it('detects missing references without reclassifying an already staged presence row', () => {
     const leitura = classifyAgainstReferences(parseLeituras(parseImportRows('leituras.csv', 'AVOP_ID,ID\nAVOP 01-2026,ABC\n')), emptyReference());
     const presenca = classifyAgainstReferences(parsePresencas(parseImportRows('presencas.csv', 'APRONTO_ID,ID,STATUS\nAPR-2026-001,ABC,\n')), emptyReference());
 
     expect(leitura.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining(['MISSING_PROFILE_REFERENCE', 'MISSING_AVOP_REFERENCE']));
-    expect(presenca.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining(['MISSING_PROFILE_REFERENCE', 'MISSING_BRIEFING_REFERENCE', 'AMBIGUOUS_EMPTY_RECORD']));
+    expect(presenca.issues.map((issue) => issue.code)).toContain('AMBIGUOUS_EMPTY_RECORD');
+    expect(presenca.issues.map((issue) => issue.code)).not.toEqual(expect.arrayContaining(['MISSING_PROFILE_REFERENCE', 'MISSING_BRIEFING_REFERENCE']));
+    expect(presenca.operations[0].payload).toMatchObject({
+      classification: 'ambiguous',
+      normalized: { trigram: 'ABC', briefingId: 'APR-2026-001' },
+    });
+  });
+
+  it('validates references for material-only presence rows and keeps them applicable', () => {
+    const parsed = parsePresencas(parseImportRows(
+      'presencas.csv',
+      'APRONTO_ID,ID,STATUS,CIENCIA_MATERIAL\nAPR-2026-001,ABC,,SIM\n',
+    ));
+    const classified = classifyAgainstReferences(parsed, {
+      trigrams: ['ABC'],
+      adminTrigrams: [],
+      avopNumbers: [],
+      briefingLegacyIds: ['APR-2026-001'],
+      oiKeys: [],
+      audienceCodes: [],
+    });
+
+    expect(classified).toMatchObject({ valid: 1, invalid: 0 });
+    expect(classified.operations[0]).toMatchObject({
+      operation: 'link',
+      payload: { attendanceStatus: null, materialAcknowledged: true },
+    });
+    expect(sanitizeImportReport(classified, { generatedAt: '2026-09-26T00:00:00.000Z' }).canApply).toBe(true);
   });
 
   it('creates a confirmed preview batch without operational writes', async () => {

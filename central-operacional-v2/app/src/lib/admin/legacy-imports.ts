@@ -255,6 +255,10 @@ export function classifyAgainstReferences(
   let duplicates = sheet.duplicates;
 
   for (const operation of sheet.operations as Array<ImportOperation<Record<string, unknown>>>) {
+    if (operation.operation === 'stage') {
+      operations.push(operation);
+      continue;
+    }
     const rowIssues = validateOperationAgainstReferences(operation, existing);
     if (rowIssues.length) {
       issues.push(...rowIssues);

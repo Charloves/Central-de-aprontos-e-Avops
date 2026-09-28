@@ -3,6 +3,7 @@ import type { AuthenticatedSession } from '@/lib/auth/authorization';
 import { FakeBriefingRepository } from './fake-briefing-repository';
 import {
   getBriefingCloseInstant,
+  getAttendanceLabel,
   getEffectiveBriefingStatus,
   isValidBriefingMaterialUrl,
   normalizeJustificationText,
@@ -137,7 +138,7 @@ describe('Briefing module service', () => {
     expect(first).toMatchObject({ ok: true, alreadyAcknowledged: false });
     expect(second).toMatchObject({ ok: true, alreadyAcknowledged: true });
     expect(first.ok && second.ok ? second.record.recordedAt : null).toBe('2026-08-11T10:00:00.000Z');
-    expect(first.ok ? first.record.attendanceStatus : null).toBe('PENDENTE');
+    expect(first.ok ? first.record.attendanceStatus : 'unexpected').toBeNull();
     expect(repo.materialWrites).toBe(1);
   });
 
@@ -197,6 +198,13 @@ describe('Briefing module service', () => {
 
     expect(todos?.record?.attendanceStatus).toBe('');
     expect(todos?.record?.materialAcknowledged).toBe(false);
+    expect(getAttendanceLabel(todos?.record ?? null)).toBe('Sem registro');
+    expect(getAttendanceLabel(record({
+      briefingId: 'briefing-todos',
+      profileId: 'profile-user',
+      attendanceStatus: null,
+      materialAcknowledged: true,
+    }))).toBe('Sem registro');
   });
 
   it('valida justificativa vazia, curta, excessiva e com tentativa de HTML ou script', async () => {

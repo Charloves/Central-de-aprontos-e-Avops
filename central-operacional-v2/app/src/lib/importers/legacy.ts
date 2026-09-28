@@ -543,7 +543,10 @@ function parsePresencaRow(row: RawRow, rowNumber: number): ParsedRow<PresencaPay
   const justificationText = normalizeText(row.OBS) || normalizeText(row.JUSTIFICATIVA) || null;
   const materialAcknowledged = parseYesNo(row.CIENCIA_MATERIAL) === true;
   const recordedAt = normalizeOptionalIsoDate(row.DATA || row.DATA_HORA || row.TIMESTAMP);
-  const isAmbiguous = attendanceStatus === null;
+  const hasUnknownStatus = Boolean(status) && attendanceStatus === null;
+  const hasConflictingJustification = Boolean(justificationText) && attendanceStatus !== 'JUSTIFICADO';
+  const isEmpty = attendanceStatus === null && !justificationText && !materialAcknowledged;
+  const isAmbiguous = hasUnknownStatus || hasConflictingJustification || isEmpty;
   const issues = requiredValueIssues('PRESENCAS', rowNumber, row, [
     ['APRONTO_ID', briefingId],
     ['ID', trigram],
@@ -556,7 +559,7 @@ function parsePresencaRow(row: RawRow, rowNumber: number): ParsedRow<PresencaPay
     );
   }
 
-  if (isAmbiguous) {
+  if (isEmpty) {
     warnings.push(
       warningIssue(
         'PRESENCAS',
@@ -568,7 +571,7 @@ function parsePresencaRow(row: RawRow, rowNumber: number): ParsedRow<PresencaPay
     );
   }
 
-  if (justificationText && attendanceStatus !== 'JUSTIFICADO') {
+  if (hasConflictingJustification) {
     warnings.push(
       warningIssue(
         'PRESENCAS',
@@ -580,13 +583,13 @@ function parsePresencaRow(row: RawRow, rowNumber: number): ParsedRow<PresencaPay
     );
   }
 
-  if (isAmbiguous && (status || justificationText || materialAcknowledged)) {
+  if ((hasUnknownStatus || hasConflictingJustification) && (status || justificationText || materialAcknowledged)) {
     warnings.push(
       warningIssue(
         'PRESENCAS',
         rowNumber,
         'AMBIGUOUS_WITHOUT_DEFINITIVE_STATUS',
-        'Linha possui informacao parcial, mas nao tem attendance_status definitivo para briefing_records.',
+        'Linha possui informações conflitantes ou status desconhecido e exige decisão humana.',
         row,
       ),
     );
@@ -1331,7 +1334,7 @@ function createStagingOperation(
     issues: issues.map(({ severity, code, message }) => ({ severity, code, message })),
     limitationReason:
       classification === 'ambiguous' && sheet === 'PRESENCAS'
-        ? 'registro historico ambiguo sem status, justificativa ou ciencia de material'
+        ? 'registro histórico ambíguo exige decisão humana sem inventar presença, falta ou justificativa'
         : classification === 'ambiguous'
         ? 'registro historico ambiguo preservado sem inventar classificacao'
         : classification === 'invalid'

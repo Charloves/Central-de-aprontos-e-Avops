@@ -8,7 +8,7 @@ export type BriefingRecord = {
   id: string;
   briefingId: string;
   profileId: string;
-  attendanceStatus: BriefingAttendanceStatus;
+  attendanceStatus: BriefingAttendanceStatus | null;
   materialAcknowledged: boolean;
   recordedAt: string;
 };

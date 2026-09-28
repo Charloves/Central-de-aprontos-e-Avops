@@ -248,7 +248,7 @@ describe('legacy importers', () => {
       payload: {
         sourceSheet: 'PRESENCAS',
         classification: 'ambiguous',
-        limitationReason: 'registro historico ambiguo sem status, justificativa ou ciencia de material',
+        limitationReason: 'registro histórico ambíguo exige decisão humana sem inventar presença, falta ou justificativa',
         resolvedEntityType: null,
         resolvedEntityId: null,
       },
@@ -257,6 +257,61 @@ describe('legacy importers', () => {
     expect(JSON.stringify(result.operations[0].payload)).not.toContain('"attendanceStatus":"PRESENTE"');
     expect(JSON.stringify(result.operations[0].payload)).not.toContain('"attendanceStatus":"AUSENTE"');
     expect(result.issues).toMatchObject([{ severity: 'warning', code: 'AMBIGUOUS_EMPTY_RECORD' }]);
+  });
+
+  it('aceita ciência de material sem inventar presença ou falta', () => {
+    const result = parsePresencas([{
+      DATA: '16/03/2026',
+      APRONTO_ID: 'APR-2026-001',
+      ID: 'abc',
+      STATUS: '',
+      OBS: '',
+      CIENCIA_MATERIAL: 'SIM',
+    }]);
+
+    expect(result).toMatchObject({
+      valid: 1,
+      invalid: 0,
+      metrics: { presencas: 0, faltas: 0, cienciasMaterial: 1, stagingAmbiguos: 0 },
+    });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'link',
+      payload: {
+        attendanceStatus: null,
+        hasAttendance: false,
+        hasAbsence: false,
+        materialAcknowledged: true,
+      },
+    });
+    expect(result.issues).toEqual([]);
+  });
+
+  it('mantém PRESENTE com justificativa em staging para decisão humana', () => {
+    const result = parsePresencas([{
+      DATA: '16/03/2026',
+      APRONTO_ID: 'APR-2026-001',
+      ID: 'abc',
+      STATUS: 'PRESENTE',
+      JUSTIFICATIVA: 'Texto legado conflitante',
+      CIENCIA_MATERIAL: 'SIM',
+    }]);
+
+    expect(result).toMatchObject({ valid: 0, metrics: { stagingAmbiguos: 1 } });
+    expect(result.operations[0]).toMatchObject({
+      operation: 'stage',
+      payload: {
+        classification: 'ambiguous',
+        normalized: {
+          attendanceStatus: 'PRESENTE',
+          justificationText: 'Texto legado conflitante',
+          materialAcknowledged: true,
+        },
+      },
+    });
+    expect(result.issues.map((item) => item.code)).toEqual(expect.arrayContaining([
+      'JUSTIFICATION_WITHOUT_JUSTIFIED_STATUS',
+      'AMBIGUOUS_WITHOUT_DEFINITIVE_STATUS',
+    ]));
   });
 
   it('preserva original e normalizado parcial no staging ambiguo', () => {
