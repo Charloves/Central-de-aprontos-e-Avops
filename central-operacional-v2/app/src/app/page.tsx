@@ -1,3 +1,5 @@
+import { environmentCopy } from '@/lib/content/environment-copy';
+
 type HomePageProps = {
   searchParams?: Promise<{ error?: string | string[] }>;
 };
@@ -5,16 +7,14 @@ type HomePageProps = {
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = searchParams ? await searchParams : {};
   const error = Array.isArray(params.error) ? params.error[0] : params.error;
+  const copy = environmentCopy(process.env.APP_ENV);
 
   return (
     <main className="shell">
       <section className="panel">
         <p className="muted">1º/11º GAV</p>
         <h1>Central Operacional V2</h1>
-        <p>
-          Nova versão em ambiente isolado de desenvolvimento. A Central atual e a planilha oficial permanecem
-          preservadas até a homologação e a aprovação formal.
-        </p>
+        <p>{copy.homeDescription}</p>
 
         <form className="grid" action="/api/auth/login" method="post">
           <label>

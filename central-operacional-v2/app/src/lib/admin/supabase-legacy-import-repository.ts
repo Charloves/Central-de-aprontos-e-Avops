@@ -182,13 +182,23 @@ export class SupabaseLegacyImportRepository implements LegacyImportRepository {
 
     if (error) return mapRpcError(error.code);
     const result = data as ApplyRpcResult | null;
-    if (!result?.ok || !result.batch_id || !result.audit_id) return { ok: false, reason: 'INTERNAL_ERROR' };
+    if (!result?.ok || !result.batch_id) {
+      return { ok: false, reason: 'INTERNAL_ERROR' };
+    }
+    if (result.already_applied) {
+      return {
+        ok: true,
+        batchId: result.batch_id,
+        appliedRecords: result.applied_records ?? 0,
+        alreadyApplied: true,
+      };
+    }
+    if (!result.audit_id) return { ok: false, reason: 'INTERNAL_ERROR' };
     return {
       ok: true,
       batchId: result.batch_id,
       appliedRecords: result.applied_records ?? 0,
       auditId: result.audit_id,
-      alreadyApplied: result.already_applied === true,
     };
   }
 
