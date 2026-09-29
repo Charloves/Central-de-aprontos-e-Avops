@@ -72,7 +72,8 @@ export type LegacyImportBatchSummary = {
 };
 
 export type LegacyImportApplyResult =
-  | { ok: true; batchId: string; appliedRecords: number; auditId: string; alreadyApplied?: boolean }
+  | { ok: true; batchId: string; appliedRecords: number; auditId: string; alreadyApplied?: false }
+  | { ok: true; batchId: string; appliedRecords: number; auditId?: string; alreadyApplied: true }
   | { ok: false; reason: 'FORBIDDEN' | 'INVALID_INPUT' | 'NOT_FOUND' | 'NOT_READY' | 'INTERNAL_ERROR' };
 
 export type LegacyImportRepository = {

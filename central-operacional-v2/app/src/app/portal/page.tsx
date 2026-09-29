@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { hasAdminAccess } from '@/lib/auth/session';
 import { requireSession } from '@/lib/auth/server';
+import { environmentCopy } from '@/lib/content/environment-copy';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,13 +13,14 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
   const session = await requireSession();
   const params = searchParams ? await searchParams : {};
   const error = Array.isArray(params.error) ? params.error[0] : params.error;
+  const copy = environmentCopy(process.env.APP_ENV);
 
   return (
     <main className="shell">
       <section className="panel">
         <div className="topbar">
           <div>
-            <p className="muted">Sessão V2 de homologação</p>
+            <p className="muted">{copy.sessionLabel}</p>
             <h1>Usuário {session.trigram}</h1>
           </div>
           <form action="/api/auth/logout" method="post">
@@ -32,9 +34,7 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
           </p>
         ) : null}
 
-        <p>
-          Esta tela já usa sessão assinada em cookie HttpOnly. Os módulos reais serão conectados nas próximas etapas.
-        </p>
+        <p>{copy.portalDescription}</p>
 
         <div className="grid">
           <article className="card">
