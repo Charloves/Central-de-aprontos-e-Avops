@@ -112,6 +112,10 @@ export function validateProductionEnvironment(env: EnvMap): ProductionEnvValidat
     for (const name of GMAIL_REQUIRED_WHEN_REAL) {
       summary[name] = env[name] ? 'present' : 'missing';
     }
+    summary.GMAIL_DELIVERY_CONFIRMATION = env.GMAIL_DELIVERY_CONFIRMATION ? 'invalid' : 'missing';
+    if (env.GMAIL_DELIVERY_CONFIRMATION) {
+      issues.push('GMAIL_DELIVERY_CONFIRMATION deve permanecer ausente enquanto AVOP_EMAIL_MODE=dry-run.');
+    }
   }
 
   return {
@@ -227,6 +231,14 @@ function validateGmailConfiguration(env: EnvMap, issues: string[], summary: Reco
   if (env.GMAIL_SENDER_NAME && CONTROL_CHAR_PATTERN.test(env.GMAIL_SENDER_NAME)) {
     summary.GMAIL_SENDER_NAME = 'invalid';
     issues.push('GMAIL_SENDER_NAME invalido.');
+  }
+
+  const confirmed = env.GMAIL_DELIVERY_CONFIRMATION === 'ENABLE_REAL_GMAIL_DELIVERY';
+  summary.GMAIL_DELIVERY_CONFIRMATION = confirmed
+    ? 'valid'
+    : env.GMAIL_DELIVERY_CONFIRMATION ? 'invalid' : 'missing';
+  if (!confirmed) {
+    issues.push('GMAIL_DELIVERY_CONFIRMATION deve autorizar explicitamente o envio real.');
   }
 }
 

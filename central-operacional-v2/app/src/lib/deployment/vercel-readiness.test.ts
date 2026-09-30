@@ -23,14 +23,14 @@ describe('Vercel homologation readiness', () => {
     expect(packageJson.scripts?.build).toBe('next build');
   });
 
-  it('configura cron diario em UTC para 08:00 America/Sao_Paulo', () => {
+  it('configura cron diario em UTC para a janela das 08h em America/Sao_Paulo', () => {
     expect(vercelConfig.crons).toEqual([
       {
         path: '/api/cron/avop-notifications',
         schedule: '0 11 * * *',
       },
     ]);
-    expect(docs).toContain('08:00 em `America/Sao_Paulo`');
+    expect(docs).toContain('08:00–08:59 em `America/Sao_Paulo`');
     expect(docs).toContain('Preview Deployments não disparam Cron Jobs automaticamente');
   });
 
@@ -38,7 +38,8 @@ describe('Vercel homologation readiness', () => {
     expect(cronRoute).toContain('export async function GET(request: Request)');
     expect(cronRoute).toContain('validateCronSecret');
     expect(cronRoute).toContain("response.headers.set('Cache-Control', 'no-store')");
-    expect(cronRoute).toContain("process.env.AVOP_EMAIL_MODE !== 'gmail'");
+    expect(cronRoute).toContain('resolveAvopEmailMode');
+    expect(cronRoute).toContain('process.env.GMAIL_DELIVERY_CONFIRMATION');
   });
 
   it('documenta ambiente Preview usando Supabase development e dry-run', () => {

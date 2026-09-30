@@ -46,7 +46,7 @@ export class FakeAvopNotificationRepository implements AvopNotificationRepositor
     now: Date;
   }): Promise<ReservedAvopNotification | null> {
     const key = `${input.activityId}:${input.profileId}`;
-    if (this.logs.some((log) => log.activityId === input.activityId && log.profileId === input.profileId && log.marker === input.marker && (log.result === 'SENT' || log.result === 'DRY_RUN'))) {
+    if (this.logs.some((log) => log.activityId === input.activityId && log.profileId === input.profileId && log.marker === input.marker && log.result === 'SENT')) {
       return null;
     }
     const existing = this.schedules.get(key);
@@ -76,8 +76,10 @@ export class FakeAvopNotificationRepository implements AvopNotificationRepositor
     result: AvopNotificationResult;
     idempotencyKey: string;
     stopReason?: AvopNotificationStopReason | null;
-  }): Promise<void> {
-    if (this.logs.some((log) => log.idempotencyKey === input.idempotencyKey)) return;
+  }): Promise<{ logged: boolean; stopped: boolean }> {
+    if (this.logs.some((log) => log.idempotencyKey === input.idempotencyKey)) {
+      return { logged: false, stopped: false };
+    }
     this.logs.push({
       activityId: input.activityId,
       profileId: input.profileId,
@@ -92,6 +94,7 @@ export class FakeAvopNotificationRepository implements AvopNotificationRepositor
       if (input.stopReason) schedule.stoppedReason = input.stopReason;
       if (input.result === 'PERMANENT_ERROR') schedule.stoppedReason = 'PERMANENT_EMAIL_ERROR';
     }
+    return { logged: true, stopped: Boolean(input.stopReason) || input.result === 'PERMANENT_ERROR' };
   }
 
   async stopSchedule(input: {

@@ -6,6 +6,8 @@ import {
   dueAvopMarkers,
   isSimpleEmailAddress,
   nextMarkerDate,
+  resolveAvopNotificationBaseUrl,
+  resolveAvopEmailMode,
   runAvopNotificationJob,
   validateCronSecret,
   type AvopEmailSender,
@@ -91,6 +93,42 @@ describe('avop email notification rules', () => {
     expect(validateCronSecret({ provided: secret, expected: undefined })).toBe(false);
   });
 
+  it('exige modo e confirmacao independentes antes do Gmail real', () => {
+    expect(resolveAvopEmailMode({ mode: 'dry-run', deliveryConfirmation: undefined })).toEqual({
+      dryRun: true,
+      mode: 'dry-run',
+    });
+    expect(() => resolveAvopEmailMode({ mode: 'gmail', deliveryConfirmation: undefined })).toThrow();
+    expect(() => resolveAvopEmailMode({ mode: 'dry-run', deliveryConfirmation: 'ENABLE_REAL_GMAIL_DELIVERY' })).not.toThrow();
+    expect(resolveAvopEmailMode({
+      mode: 'gmail',
+      deliveryConfirmation: 'ENABLE_REAL_GMAIL_DELIVERY',
+    })).toEqual({ dryRun: false, mode: 'gmail' });
+  });
+
+  it('exige origem HTTPS em producao e permite apenas localhost HTTP fora dela', () => {
+    expect(resolveAvopNotificationBaseUrl({
+      baseUrl: 'https://central.example.test/portal',
+      appOrigin: undefined,
+      environment: 'production',
+    })).toBe('https://central.example.test');
+    expect(resolveAvopNotificationBaseUrl({
+      baseUrl: undefined,
+      appOrigin: 'http://localhost:3000',
+      environment: 'development',
+    })).toBe('http://localhost:3000');
+    expect(() => resolveAvopNotificationBaseUrl({
+      baseUrl: 'http://central.example.test',
+      appOrigin: undefined,
+      environment: 'production',
+    })).toThrow();
+    expect(() => resolveAvopNotificationBaseUrl({
+      baseUrl: 'https://user:password@central.example.test',
+      appOrigin: undefined,
+      environment: 'production',
+    })).toThrow();
+  });
+
   it('monta templates em portugues com acentuacao exata para divulgacao e cobranca', () => {
     const initial = buildAvopNotificationEmail({
       avopNumber: 'AVOP-HML-001',
@@ -147,7 +185,7 @@ describe('avop email notification job', () => {
       baseUrl: 'https://central.example.test',
       dryRun: true,
     });
-    expect(report).toMatchObject({ scanned: 1, reserved: 1, sent: 1 });
+    expect(report).toMatchObject({ scanned: 1, reserved: 1, sent: 0, simulated: 1, deduplicated: 0 });
     expect(repository.logs).toHaveLength(1);
     expect(repository.logs[0]).toMatchObject({ marker: 'INITIAL', result: 'DRY_RUN' });
     expect(fakeSender.send).not.toHaveBeenCalled();
@@ -178,7 +216,7 @@ describe('avop email notification job', () => {
   it('nao duplica destinatario quando a listagem retornar o mesmo militar duas vezes', async () => {
     const repository = new FakeAvopNotificationRepository([baseCandidate, { ...baseCandidate }]);
     const report = await runAvopNotificationJob({ repository, sender: sender(), now: new Date('2026-01-31T00:00:00Z'), baseUrl: 'https://central.example.test', dryRun: true });
-    expect(report).toMatchObject({ scanned: 2, sent: 1, skipped: 1 });
+    expect(report).toMatchObject({ scanned: 2, sent: 0, simulated: 1, deduplicated: 1 });
     expect(repository.logs.filter((log) => log.marker === 'INITIAL')).toHaveLength(1);
   });
 
@@ -189,6 +227,29 @@ describe('avop email notification job', () => {
       runAvopNotificationJob({ repository, sender: sender(), now: new Date('2026-01-31T00:00:00Z'), baseUrl: 'https://central.example.test', dryRun: true }),
     ]);
     expect(repository.logs.filter((log) => log.marker === 'INITIAL')).toHaveLength(1);
+  });
+
+  it('nao trata dry-run anterior como envio real concluido', async () => {
+    const repository = new FakeAvopNotificationRepository([baseCandidate]);
+    await runAvopNotificationJob({
+      repository,
+      sender: sender(),
+      now: new Date('2026-01-31T00:00:00Z'),
+      baseUrl: 'https://central.example.test',
+      dryRun: true,
+    });
+    const liveSender = sender();
+    const live = await runAvopNotificationJob({
+      repository,
+      sender: liveSender,
+      now: new Date('2026-01-31T00:10:00Z'),
+      baseUrl: 'https://central.example.test',
+      dryRun: false,
+    });
+
+    expect(live.sent).toBe(1);
+    expect(liveSender.send).toHaveBeenCalledTimes(1);
+    expect(repository.logs.map((log) => log.result)).toEqual(['DRY_RUN', 'SENT']);
   });
 
   it('libera reserva expirada para nova tentativa controlada', async () => {

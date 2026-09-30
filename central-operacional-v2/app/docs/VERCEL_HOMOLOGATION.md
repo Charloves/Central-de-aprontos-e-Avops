@@ -49,7 +49,7 @@ A Vercel invoca Cron Jobs por `GET` na URL de produção do deployment e envia `
 - Path: `/api/cron/avop-notifications`.
 - Schedule: `0 11 * * *`.
 
-O horário da Vercel Cron é UTC. `0 11 * * *` corresponde a 08:00 em `America/Sao_Paulo` no fuso atual UTC-3. Se a regra oficial de fuso voltar a mudar, o agendamento deverá ser revisado.
+O horário da Vercel Cron é UTC. `0 11 * * *` corresponde à janela de 08:00–08:59 em `America/Sao_Paulo` no fuso atual UTC-3 para projetos Hobby, pois a execução pode ocorrer em qualquer instante dentro da hora. Se a regra oficial de fuso ou o plano voltar a mudar, o agendamento deverá ser revisado.
 
 Preview Deployments não disparam Cron Jobs automaticamente na Vercel. Mesmo assim, a variável `CRON_SECRET` deve estar configurada para que chamadas manuais de homologação falhem fechadas quando não autorizadas.
 

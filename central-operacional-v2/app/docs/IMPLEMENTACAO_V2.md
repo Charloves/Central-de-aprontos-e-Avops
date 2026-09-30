@@ -269,6 +269,7 @@ O envio real futuro usara a conta funcional `cdout.1gav11@gmail.com`, nunca cont
 - `GMAIL_SENDER_EMAIL`
 - `GMAIL_SENDER_NAME`
 - `AVOP_EMAIL_MODE`
+- `GMAIL_DELIVERY_CONFIRMATION`
 - `CRON_SECRET`
 
 O roteiro operacional esta em `docs/GMAIL_OAUTH_SETUP.md`. O fluxo local `npm run gmail:oauth:local` existe apenas para obter consentimento OAuth e salvar `GMAIL_REFRESH_TOKEN` em `.env.local`, sem enviar e-mail, sem acessar Supabase e sem acessar Drive. Ele usa somente o escopo `https://www.googleapis.com/auth/gmail.send`, `access_type=offline`, `prompt=consent`, callback `localhost` e validacao de `state`.
@@ -283,7 +284,9 @@ A preparação de deployment está documentada em `docs/VERCEL_HOMOLOGATION.md`.
 
 Na homologação, `SUPABASE_TARGET_ENV` permanece `development`, `AVOP_EMAIL_MODE` permanece `dry-run` e `APP_ORIGIN` deve ser a origem HTTPS exata do Preview da Vercel, sem barra final. Nenhuma variável secreta deve receber prefixo `NEXT_PUBLIC_`.
 
-O cron de AVOP é declarado em `vercel.json` como `0 11 * * *`, pois a Vercel usa UTC e esse horário corresponde a 08:00 em `America/Sao_Paulo` no fuso atual UTC-3. Preview Deployments não disparam Cron Jobs automaticamente, mas o endpoint continua protegido por `CRON_SECRET` para chamadas manuais de homologação.
+O cron de AVOP é declarado em `vercel.json` como `0 11 * * *`, pois a Vercel usa UTC e essa hora corresponde à janela de 08:00–08:59 em `America/Sao_Paulo` no fuso atual UTC-3 para projetos Hobby. Preview Deployments não disparam Cron Jobs automaticamente, mas o endpoint continua protegido por `CRON_SECRET` para chamadas manuais de homologação.
+
+O endurecimento operacional `20260929143804_harden_avop_notification_operations.sql` separa simulação de entrega: `DRY_RUN` permanece auditável, mas não consome o marco real, não incrementa `send_count` e não altera `last_sent_at`. O envio Gmail passa a exigir também `GMAIL_DELIVERY_CONFIRMATION=ENABLE_REAL_GMAIL_DELIVERY`. A RPC backend-only `get_avop_notification_health` e o endpoint protegido `/api/health/notifications` expõem somente contagens agregadas. O runbook de monitoramento, ativação e backup está em `docs/NOTIFICATION_OPERATIONS.md`.
 
 Correção de performance antes de produção: a migration `20260823000237_add_notification_log_profile_id_index.sql` adiciona o índice B-tree `notification_log_profile_id_idx` para a FK `notification_log.profile_id`, conforme achado do Performance Advisor. A correção é isolada: não altera dados, RLS, grants, policies, funções, constraints nem índices existentes.
 

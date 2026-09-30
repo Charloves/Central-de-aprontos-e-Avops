@@ -12,6 +12,7 @@ Este roteiro prepara a Central Operacional V2 para produção sem criar recursos
 - RLS e grants: migrations já aplicadas habilitam RLS nas tabelas públicas, revogam acesso de `PUBLIC`, `anon` e `authenticated` e preservam acesso backend pelo `service_role` quando necessário.
 - Cron: `/api/cron/avop-notifications` exige `CRON_SECRET`, retorna `Cache-Control: no-store` e falha fechado quando o segredo está ausente ou divergente.
 - Gmail: envio real só ocorre quando `AVOP_EMAIL_MODE=gmail`; o primeiro deploy de produção deve permanecer com `AVOP_EMAIL_MODE=dry-run`.
+- Segundo gate Gmail: envio real também exige `GMAIL_DELIVERY_CONFIRMATION=ENABLE_REAL_GMAIL_DELIVERY`; em `dry-run`, a variável deve permanecer ausente.
 - Logs: erros externos são genéricos; credenciais, tokens, cookies, hashes e segredos não devem ser registrados.
 
 ## Validador sanitizado
@@ -66,6 +67,7 @@ Configure manualmente no painel da Vercel, sem copiar valores para Git, issue, c
 | `GMAIL_REFRESH_TOKEN` | Antes de Gmail real | Sim | Necessário apenas para `AVOP_EMAIL_MODE=gmail` |
 | `GMAIL_SENDER_EMAIL` | Antes de Gmail real | Não sensível | E-mail simples da conta funcional |
 | `GMAIL_SENDER_NAME` | Antes de Gmail real | Não sensível | Nome exibido, sem caracteres de controle |
+| `GMAIL_DELIVERY_CONFIRMATION` | Somente na ativação real | Server-only | Vazio em dry-run; valor operacional exato apenas após autorização |
 
 Nunca configurar segredos como `NEXT_PUBLIC_*`.
 
@@ -134,7 +136,7 @@ O primeiro deploy de produção deve usar:
 - Gmail real configurado apenas se necessário para validação posterior, mas sem ativar `gmail`;
 - domínio HTTPS definitivo em `APP_ORIGIN`.
 
-Com `AVOP_EMAIL_MODE=dry-run`, o cron pode executar a seleção e registro controlado de notificações sem acionar Gmail real. A troca para `gmail` exige autorização operacional separada, smoke test e confirmação de templates.
+Com `AVOP_EMAIL_MODE=dry-run`, o cron pode executar a seleção e registro controlado de notificações sem acionar Gmail real. Simulações não consomem marcos nem incrementam contadores de envio. A troca para `gmail` exige autorização operacional separada, `GMAIL_DELIVERY_CONFIRMATION`, smoke test e confirmação de templates. O roteiro completo está em `docs/NOTIFICATION_OPERATIONS.md`.
 
 ## Smoke test
 
