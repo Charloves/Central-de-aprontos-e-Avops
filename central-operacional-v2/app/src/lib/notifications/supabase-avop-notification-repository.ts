@@ -11,6 +11,7 @@ import type {
   AvopNotificationType,
   ReservedAvopNotification,
 } from './avop-email';
+import { mapAvopNotificationHealth, type AvopNotificationHealth, type AvopNotificationHealthRow } from './health';
 
 type CandidateRow = {
   avop_id: string;
@@ -48,6 +49,17 @@ export class SupabaseAvopNotificationRepository implements AvopNotificationRepos
       acknowledged: row.acknowledged,
       sentMarkers: (row.sent_markers ?? []) as AvopNotificationMarker[],
     }));
+  }
+
+  async getHealth(now: Date = new Date()): Promise<AvopNotificationHealth> {
+    const { data, error } = await this.client.rpc('get_avop_notification_health', {
+      p_now: now.toISOString(),
+    });
+    if (error) throw error;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('Invalid notification health response.');
+    }
+    return mapAvopNotificationHealth(data as AvopNotificationHealthRow);
   }
 
   async reserve(input: {
@@ -94,8 +106,8 @@ export class SupabaseAvopNotificationRepository implements AvopNotificationRepos
     nextSendAt: Date | null;
     stopReason?: AvopNotificationStopReason | null;
     now: Date;
-  }): Promise<void> {
-    const { error } = await this.client.rpc('record_avop_notification_result', {
+  }): Promise<{ logged: boolean; stopped: boolean }> {
+    const { data, error } = await this.client.rpc('record_avop_notification_result', {
       p_schedule_id: input.scheduleId,
       p_activity_id: input.activityId,
       p_profile_id: input.profileId,
@@ -112,6 +124,11 @@ export class SupabaseAvopNotificationRepository implements AvopNotificationRepos
       p_now: input.now.toISOString(),
     });
     if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return {
+      logged: Boolean(row?.logged),
+      stopped: Boolean(row?.stopped),
+    };
   }
 
   async stopSchedule(input: {

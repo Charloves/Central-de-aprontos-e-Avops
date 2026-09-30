@@ -13,6 +13,7 @@ GMAIL_REFRESH_TOKEN=
 GMAIL_SENDER_EMAIL=cdout.1gav11@gmail.com
 GMAIL_SENDER_NAME=CDOUT - 1/11 GAV
 AVOP_EMAIL_MODE=dry-run
+GMAIL_DELIVERY_CONFIRMATION=
 CRON_SECRET=
 ```
 
@@ -75,6 +76,8 @@ Antes de ativar `AVOP_EMAIL_MODE=gmail`:
 3. Execute `npm run gmail:oauth:check`.
 4. Execute `npm run lint`, `npm test -- --reporter=verbose`, `npm run typecheck`, `npm run build` e `npm audit --offline=false`.
 5. Mantenha `AVOP_EMAIL_MODE=dry-run` ate a etapa explicitamente autorizada de envio real.
+6. Mantenha `GMAIL_DELIVERY_CONFIRMATION` vazio durante dry-run.
+7. Consulte `docs/NOTIFICATION_OPERATIONS.md`; o cron real exige os dois gates no mesmo deployment.
 
 ## Envio real unico controlado
 
@@ -116,6 +119,6 @@ O preflight exibe apenas estados sanitizados, como variaveis presentes/ausentes 
 
 ## Pendencias antes de producao
 
-- Criar migration futura para indice de apoio em `notification_log.profile_id`, apontado pelo Performance Advisor apos a homologacao da engine.
+- O indice de apoio `notification_log.profile_id` ja foi criado pela migration `20260823000237_add_notification_log_profile_id_index.sql`.
 - Definir rotina operacional de rotacao do `GMAIL_REFRESH_TOKEN`.
 - Confirmar o estado Production do app OAuth para evitar expiracao semanal do refresh token.

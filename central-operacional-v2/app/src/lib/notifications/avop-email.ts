@@ -37,6 +37,11 @@ export type ReservedAvopNotification = {
   reservationTokenHash: string;
 };
 
+export type RecordedAvopNotification = {
+  logged: boolean;
+  stopped: boolean;
+};
+
 export type AvopNotificationRepository = {
   listCandidates(now: Date): Promise<AvopNotificationCandidate[]>;
   reserve(input: {
@@ -64,7 +69,7 @@ export type AvopNotificationRepository = {
     nextSendAt: Date | null;
     stopReason?: AvopNotificationStopReason | null;
     now: Date;
-  }): Promise<void>;
+  }): Promise<RecordedAvopNotification>;
   stopSchedule(input: {
     activityId: string;
     profileId: string;
@@ -90,11 +95,44 @@ export type AvopNotificationJobReport = {
   scanned: number;
   reserved: number;
   sent: number;
+  simulated: number;
+  deduplicated: number;
   skipped: number;
   stopped: number;
   temporaryErrors: number;
   permanentErrors: number;
 };
+
+export const GMAIL_DELIVERY_CONFIRMATION = 'ENABLE_REAL_GMAIL_DELIVERY';
+
+export function resolveAvopEmailMode(input: {
+  mode: string | undefined;
+  deliveryConfirmation: string | undefined;
+}): { dryRun: boolean; mode: 'dry-run' | 'gmail' } {
+  if (input.mode === 'dry-run') return { dryRun: true, mode: 'dry-run' };
+  if (input.mode === 'gmail' && input.deliveryConfirmation === GMAIL_DELIVERY_CONFIRMATION) {
+    return { dryRun: false, mode: 'gmail' };
+  }
+  throw new Error('AVOP email delivery configuration is not authorized.');
+}
+
+export function resolveAvopNotificationBaseUrl(input: {
+  baseUrl: string | undefined;
+  appOrigin: string | undefined;
+  environment: string | undefined;
+}): string {
+  const raw = input.baseUrl || input.appOrigin;
+  if (!raw) throw new Error('AVOP notification base URL is not configured.');
+  const url = new URL(raw);
+  const localDevelopment = input.environment !== 'production'
+    && url.protocol === 'http:'
+    && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+  if (url.protocol !== 'https:' && !localDevelopment) {
+    throw new Error('AVOP notification base URL is not secure.');
+  }
+  if (url.username || url.password) throw new Error('AVOP notification base URL contains credentials.');
+  return url.origin;
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EMAIL_PATTERN = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
@@ -168,6 +206,8 @@ export async function runAvopNotificationJob(input: {
     scanned: 0,
     reserved: 0,
     sent: 0,
+    simulated: 0,
+    deduplicated: 0,
     skipped: 0,
     stopped: 0,
     temporaryErrors: 0,
@@ -239,7 +279,7 @@ export async function runAvopNotificationJob(input: {
       const sendResult = input.dryRun
         ? { providerMessageId: null }
         : await input.sender.send({ to: recipient, subject: message.subject, body: message.body });
-      await input.repository.recordResult({
+      const recorded = await input.repository.recordResult({
         scheduleId: reservation.scheduleId,
         activityId: candidate.avopId,
         profileId: candidate.profileId,
@@ -252,10 +292,12 @@ export async function runAvopNotificationJob(input: {
         nextSendAt: decision.nextSendAt,
         now,
       });
-      report.sent += 1;
+      if (!recorded.logged) report.deduplicated += 1;
+      else if (input.dryRun) report.simulated += 1;
+      else report.sent += 1;
     } catch (error) {
       const permanent = error instanceof PermanentEmailError;
-      await input.repository.recordResult({
+      const recorded = await input.repository.recordResult({
         scheduleId: reservation.scheduleId,
         activityId: candidate.avopId,
         profileId: candidate.profileId,
@@ -270,7 +312,8 @@ export async function runAvopNotificationJob(input: {
         stopReason: permanent ? 'PERMANENT_EMAIL_ERROR' : null,
         now,
       });
-      if (permanent) report.permanentErrors += 1;
+      if (!recorded.logged) report.deduplicated += 1;
+      else if (permanent) report.permanentErrors += 1;
       else report.temporaryErrors += 1;
     }
   }

@@ -91,11 +91,13 @@ describe('production environment validator', () => {
       GMAIL_REFRESH_TOKEN: 'refresh-token',
       GMAIL_SENDER_EMAIL: 'central@example.test',
       GMAIL_SENDER_NAME: 'Central Operacional',
+      GMAIL_DELIVERY_CONFIRMATION: undefined,
     });
 
     expect(dryRun.ok).toBe(true);
     expect(gmail.ok).toBe(false);
     expect(gmail.summary.GMAIL_CLIENT_SECRET).toBe('missing');
+    expect(gmail.summary.GMAIL_DELIVERY_CONFIRMATION).toBe('missing');
   });
 
   it('rejeita Gmail real com remetente inseguro', () => {
@@ -107,10 +109,41 @@ describe('production environment validator', () => {
       GMAIL_REFRESH_TOKEN: 'gmail-refresh-token-1234567890',
       GMAIL_SENDER_EMAIL: 'central@example.test,other@example.test',
       GMAIL_SENDER_NAME: 'Central Operacional',
+      GMAIL_DELIVERY_CONFIRMATION: 'ENABLE_REAL_GMAIL_DELIVERY',
     });
 
     expect(result.ok).toBe(false);
     expect(result.summary.GMAIL_SENDER_EMAIL).toBe('invalid');
+  });
+
+  it('exige confirmacao adicional no modo Gmail e a rejeita durante dry-run', () => {
+    const missingConfirmation = validateProductionEnvironment({
+      ...validEnv,
+      AVOP_EMAIL_MODE: 'gmail',
+      GMAIL_CLIENT_ID: 'client-id',
+      GMAIL_CLIENT_SECRET: 'gmail-client-1234567890abcdef',
+      GMAIL_REFRESH_TOKEN: 'gmail-refresh-token-1234567890',
+      GMAIL_SENDER_EMAIL: 'central@example.test',
+      GMAIL_SENDER_NAME: 'Central Operacional',
+    });
+    const armedDryRun = validateProductionEnvironment({
+      ...validEnv,
+      GMAIL_DELIVERY_CONFIRMATION: 'ENABLE_REAL_GMAIL_DELIVERY',
+    });
+    const authorized = validateProductionEnvironment({
+      ...validEnv,
+      AVOP_EMAIL_MODE: 'gmail',
+      GMAIL_CLIENT_ID: 'client-id',
+      GMAIL_CLIENT_SECRET: 'gmail-client-1234567890abcdef',
+      GMAIL_REFRESH_TOKEN: 'gmail-refresh-token-1234567890',
+      GMAIL_SENDER_EMAIL: 'central@example.test',
+      GMAIL_SENDER_NAME: 'Central Operacional',
+      GMAIL_DELIVERY_CONFIRMATION: 'ENABLE_REAL_GMAIL_DELIVERY',
+    });
+
+    expect(missingConfirmation.ok).toBe(false);
+    expect(armedDryRun.ok).toBe(false);
+    expect(authorized.ok).toBe(true);
   });
 
   it('rejeita NEXT_PUBLIC contendo segredos ou credenciais', () => {
