@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   PermanentEmailError,
+  buildAvopNotificationDigestEmail,
   buildAvopNotificationEmail,
   decideAvopNotification,
   dueAvopMarkers,
@@ -172,6 +173,51 @@ describe('avop email notification rules', () => {
       'Esta é uma mensagem automática da Central Operacional.',
     ].join('\n'));
   });
+
+  it('consolida todas as pendencias do destinatario em uma unica mensagem', () => {
+    const digest = buildAvopNotificationDigestEmail({
+      items: [
+        {
+          avopNumber: 'AVOP 01-2026',
+          title: 'Instrução de aviação',
+          marker: 'INITIAL',
+          acknowledgementUrl: 'https://central.example.test/portal/avops?avop=1',
+        },
+        {
+          avopNumber: 'AVOP 02-2026',
+          title: 'Operação em São Paulo',
+          marker: 'WEEK_7',
+          acknowledgementUrl: 'https://central.example.test/portal/avops?avop=2',
+        },
+      ],
+    });
+
+    expect(digest.subject).toBe('Central Operacional — AVOPs pendentes de ciência');
+    expect(digest.body).toContain('1. AVOP 01-2026 — Instrução de aviação');
+    expect(digest.body).toContain('2. AVOP 02-2026 — Operação em São Paulo');
+    expect(digest.body).toContain('https://central.example.test/portal/avops?avop=1');
+    expect(digest.body).toContain('https://central.example.test/portal/avops?avop=2');
+    expect(digest.body).toContain('não registra ciência automaticamente');
+  });
+
+  it('rejeita controles em dados operacionais antes de montar o digest', () => {
+    expect(() => buildAvopNotificationDigestEmail({
+      items: [
+        {
+          avopNumber: 'AVOP 01-2026',
+          title: 'Título válido',
+          marker: 'INITIAL',
+          acknowledgementUrl: 'https://central.example.test/portal/avops?avop=1',
+        },
+        {
+          avopNumber: 'AVOP 02-2026',
+          title: 'Título\r\nBcc: terceiro@example.test',
+          marker: 'WEEK_7',
+          acknowledgementUrl: 'https://central.example.test/portal/avops?avop=2',
+        },
+      ],
+    })).toThrow(PermanentEmailError);
+  });
 });
 
 describe('avop email notification job', () => {
@@ -204,6 +250,105 @@ describe('avop email notification job', () => {
     expect(report.sent).toBe(1);
     expect(fakeSender.send).toHaveBeenCalledTimes(1);
     expect(repository.logs[0]).toMatchObject({ marker: 'WEEK_7', result: 'SENT' });
+  });
+
+  it('envia um unico digest para dois AVOPs pendentes do mesmo militar', async () => {
+    const fakeSender = sender();
+    const repository = new FakeAvopNotificationRepository([
+      baseCandidate,
+      {
+        ...baseCandidate,
+        avopId: 'avop-2',
+        avopNumber: 'AVOP-HML-002',
+        title: 'Segundo AVOP fictício',
+      },
+    ]);
+    const report = await runAvopNotificationJob({
+      repository,
+      sender: fakeSender,
+      now: new Date('2026-01-31T12:00:00Z'),
+      baseUrl: 'https://central.example.test',
+      dryRun: false,
+    });
+
+    expect(fakeSender.send).toHaveBeenCalledTimes(1);
+    expect(fakeSender.send).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'militar@example.test',
+      subject: 'Central Operacional — AVOPs pendentes de ciência',
+    }));
+    const body = fakeSender.send.mock.calls[0]?.[0].body;
+    expect(body).toContain('AVOP-HML-001');
+    expect(body).toContain('AVOP-HML-002');
+    expect(report).toMatchObject({ reserved: 2, sent: 1, itemsSent: 2 });
+    expect(repository.logs).toHaveLength(2);
+  });
+
+  it('lista no digest uma pendencia ainda sem novo marco sem consumir esse marco', async () => {
+    const fakeSender = sender();
+    const repository = new FakeAvopNotificationRepository([
+      baseCandidate,
+      {
+        ...baseCandidate,
+        avopId: 'avop-2',
+        avopNumber: 'AVOP-HML-002',
+        publicationDate: '2026-01-28',
+        sentMarkers: ['INITIAL'],
+      },
+    ]);
+    const report = await runAvopNotificationJob({
+      repository,
+      sender: fakeSender,
+      now: new Date('2026-01-31T12:00:00Z'),
+      baseUrl: 'https://central.example.test',
+      dryRun: false,
+    });
+
+    expect(fakeSender.send).toHaveBeenCalledTimes(1);
+    expect(fakeSender.send.mock.calls[0]?.[0].body).toContain('AVOP-HML-002');
+    expect(report).toMatchObject({ sent: 1, itemsSent: 1, skipped: 1 });
+    expect(repository.logs).toHaveLength(1);
+    expect(repository.logs[0]).toMatchObject({ activityId: 'avop-1', marker: 'INITIAL' });
+  });
+
+  it('mantem um digest separado por destinatario', async () => {
+    const fakeSender = sender();
+    const repository = new FakeAvopNotificationRepository([
+      baseCandidate,
+      {
+        ...baseCandidate,
+        avopId: 'avop-2',
+        profileId: 'profile-2',
+        recipientEmail: 'outro@example.test',
+      },
+    ]);
+    const report = await runAvopNotificationJob({
+      repository,
+      sender: fakeSender,
+      now: new Date('2026-01-31T12:00:00Z'),
+      baseUrl: 'https://central.example.test',
+      dryRun: false,
+    });
+
+    expect(fakeSender.send).toHaveBeenCalledTimes(2);
+    expect(report).toMatchObject({ sent: 2, itemsSent: 2 });
+  });
+
+  it('simula um unico digest sem chamar Gmail', async () => {
+    const fakeSender = sender();
+    const repository = new FakeAvopNotificationRepository([
+      baseCandidate,
+      { ...baseCandidate, avopId: 'avop-2', avopNumber: 'AVOP-HML-002' },
+    ]);
+    const report = await runAvopNotificationJob({
+      repository,
+      sender: fakeSender,
+      now: new Date('2026-01-31T12:00:00Z'),
+      baseUrl: 'https://central.example.test',
+      dryRun: true,
+    });
+
+    expect(fakeSender.send).not.toHaveBeenCalled();
+    expect(report).toMatchObject({ simulated: 1, itemsSimulated: 2, sent: 0 });
   });
 
   it('nao duplica envio em job repetido', async () => {
@@ -294,6 +439,23 @@ describe('avop email notification job', () => {
     const second = await runAvopNotificationJob({ repository, sender: sender(), now: new Date('2026-02-07T00:10:00Z'), baseUrl: 'https://central.example.test', dryRun: false });
     expect(first.temporaryErrors).toBe(1);
     expect(second.sent).toBe(1);
+  });
+
+  it('nao reclassifica falha de persistencia posterior ao envio como erro do Gmail', async () => {
+    const fakeSender = sender();
+    const repository = new FakeAvopNotificationRepository([baseCandidate]);
+    const recordResult = vi.spyOn(repository, 'recordDigestResult')
+      .mockRejectedValueOnce(new Error('falha de persistência'));
+
+    await expect(runAvopNotificationJob({
+      repository,
+      sender: fakeSender,
+      now: new Date('2026-01-31T00:00:00Z'),
+      baseUrl: 'https://central.example.test',
+      dryRun: false,
+    })).rejects.toThrow('falha de persistência');
+    expect(fakeSender.send).toHaveBeenCalledTimes(1);
+    expect(recordResult).toHaveBeenCalledTimes(1);
   });
 
   it('registra erro permanente sem loop infinito', async () => {

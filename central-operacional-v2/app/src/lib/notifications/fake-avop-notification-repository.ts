@@ -1,8 +1,10 @@
 import type {
   AvopNotificationCandidate,
   AvopNotificationMarker,
+  AvopNotificationReservationItem,
   AvopNotificationRepository,
   AvopNotificationResult,
+  AvopNotificationResultItem,
   AvopNotificationStopReason,
   AvopNotificationType,
   ReservedAvopNotification,
@@ -95,6 +97,86 @@ export class FakeAvopNotificationRepository implements AvopNotificationRepositor
       if (input.result === 'PERMANENT_ERROR') schedule.stoppedReason = 'PERMANENT_EMAIL_ERROR';
     }
     return { logged: true, stopped: Boolean(input.stopReason) || input.result === 'PERMANENT_ERROR' };
+  }
+
+  async reserveDigest(input: {
+    profileId: string;
+    items: AvopNotificationReservationItem[];
+    reservationTokenHash: string;
+    reservedUntil: Date;
+    now: Date;
+  }) {
+    const unavailable = input.items.some((item) => {
+      const key = `${item.activityId}:${input.profileId}`;
+      const completed = this.logs.some((log) => log.activityId === item.activityId
+        && log.profileId === input.profileId
+        && log.marker === item.marker
+        && log.result === 'SENT');
+      const existing = this.schedules.get(key);
+      const reservedByAnother = Boolean(existing?.reservedUntil
+        && existing.reservedUntil > input.now
+        && existing.reservationTokenHash !== input.reservationTokenHash);
+      return completed || reservedByAnother || existing?.stoppedReason;
+    });
+    if (unavailable || input.items.length === 0) return [];
+
+    return input.items.map((item) => {
+      const key = `${item.activityId}:${input.profileId}`;
+      const schedule = this.schedules.get(key) ?? {
+        id: `schedule-${this.schedules.size + 1}`,
+        activityId: item.activityId,
+        profileId: input.profileId,
+        marker: item.marker,
+        reservedUntil: null,
+        reservationTokenHash: null,
+        stoppedReason: null,
+      };
+      schedule.marker = item.marker;
+      schedule.reservedUntil = input.reservedUntil;
+      schedule.reservationTokenHash = input.reservationTokenHash;
+      this.schedules.set(key, schedule);
+      return { ...item, scheduleId: schedule.id };
+    });
+  }
+
+  async recordDigestResult(input: {
+    profileId: string;
+    reservationTokenHash: string;
+    items: AvopNotificationResultItem[];
+    result: AvopNotificationResult;
+    stopReason?: AvopNotificationStopReason | null;
+  }): Promise<{ logged: number; stopped: number }> {
+    const ownsEveryReservation = input.items.every((item) => {
+      const schedule = this.schedules.get(`${item.activityId}:${input.profileId}`);
+      return schedule?.id === item.scheduleId
+        && schedule.reservationTokenHash === input.reservationTokenHash;
+    });
+    if (!ownsEveryReservation) throw new Error('Digest reservation ownership mismatch.');
+
+    let logged = 0;
+    let stopped = 0;
+    for (const item of input.items) {
+      if (!this.logs.some((log) => log.idempotencyKey === item.idempotencyKey)) {
+        this.logs.push({
+          activityId: item.activityId,
+          profileId: input.profileId,
+          marker: item.marker,
+          result: input.result,
+          idempotencyKey: item.idempotencyKey,
+        });
+        logged += 1;
+        if (input.stopReason || input.result === 'PERMANENT_ERROR') stopped += 1;
+      }
+    }
+    for (const item of input.items) {
+      const schedule = this.schedules.get(`${item.activityId}:${input.profileId}`);
+      if (!schedule) continue;
+      schedule.reservedUntil = null;
+      schedule.reservationTokenHash = null;
+      if (input.stopReason) schedule.stoppedReason = input.stopReason;
+      if (input.result === 'PERMANENT_ERROR') schedule.stoppedReason = 'PERMANENT_EMAIL_ERROR';
+    }
+    return { logged, stopped };
   }
 
   async stopSchedule(input: {

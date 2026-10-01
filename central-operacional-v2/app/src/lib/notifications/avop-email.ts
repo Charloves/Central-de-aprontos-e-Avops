@@ -42,6 +42,21 @@ export type RecordedAvopNotification = {
   stopped: boolean;
 };
 
+export type AvopNotificationReservationItem = {
+  activityId: string;
+  notificationType: AvopNotificationType;
+  marker: AvopNotificationMarker;
+  nextSendAt: Date | null;
+};
+
+export type ReservedAvopNotificationDigestItem = AvopNotificationReservationItem & {
+  scheduleId: string;
+};
+
+export type AvopNotificationResultItem = ReservedAvopNotificationDigestItem & {
+  idempotencyKey: string;
+};
+
 export type AvopNotificationRepository = {
   listCandidates(now: Date): Promise<AvopNotificationCandidate[]>;
   reserve(input: {
@@ -70,6 +85,26 @@ export type AvopNotificationRepository = {
     stopReason?: AvopNotificationStopReason | null;
     now: Date;
   }): Promise<RecordedAvopNotification>;
+  reserveDigest(input: {
+    profileId: string;
+    items: AvopNotificationReservationItem[];
+    reservationTokenHash: string;
+    reservedUntil: Date;
+    now: Date;
+  }): Promise<ReservedAvopNotificationDigestItem[]>;
+  recordDigestResult(input: {
+    profileId: string;
+    recipient: string;
+    reservationTokenHash: string;
+    digestIdempotencyKey: string;
+    items: AvopNotificationResultItem[];
+    result: AvopNotificationResult;
+    providerMessageId?: string | null;
+    error?: string | null;
+    errorKind?: 'TEMPORARY' | 'PERMANENT' | 'CONFIGURATION' | 'VALIDATION' | null;
+    stopReason?: AvopNotificationStopReason | null;
+    now: Date;
+  }): Promise<{ logged: number; stopped: number }>;
   stopSchedule(input: {
     activityId: string;
     profileId: string;
@@ -101,6 +136,8 @@ export type AvopNotificationJobReport = {
   stopped: number;
   temporaryErrors: number;
   permanentErrors: number;
+  itemsSent: number;
+  itemsSimulated: number;
 };
 
 export const GMAIL_DELIVERY_CONFIRMATION = 'ENABLE_REAL_GMAIL_DELIVERY';
@@ -212,17 +249,24 @@ export async function runAvopNotificationJob(input: {
     stopped: 0,
     temporaryErrors: 0,
     permanentErrors: 0,
+    itemsSent: 0,
+    itemsSimulated: 0,
   };
 
   const candidates = await input.repository.listCandidates(now);
+  const recipientDigests = new Map<string, {
+    profileId: string;
+    recipient: string;
+    pendingCandidates: AvopNotificationCandidate[];
+    items: Array<{
+      candidate: AvopNotificationCandidate;
+      decision: Extract<AvopNotificationDecision, { action: 'SEND' }>;
+    }>;
+  }>();
+
   for (const candidate of candidates) {
     report.scanned += 1;
     const decision = decideAvopNotification(candidate, now);
-    if (decision.action === 'SKIP') {
-      report.skipped += 1;
-      continue;
-    }
-
     const recipient = candidate.recipientEmail ?? '';
     if (decision.action === 'STOP') {
       await input.repository.stopSchedule({
@@ -235,6 +279,28 @@ export async function runAvopNotificationJob(input: {
         now,
       });
       report.stopped += 1;
+      continue;
+    }
+
+    if (decision.action === 'SKIP') {
+      report.skipped += 1;
+      if ((decision.reason === 'NOT_DUE' || decision.reason === 'ALREADY_SENT')
+        && isSimpleEmailAddress(recipient)) {
+        const existingDigest = recipientDigests.get(candidate.profileId);
+        if (existingDigest && existingDigest.recipient !== recipient) {
+          throw new Error('Inconsistent recipient for AVOP notification profile.');
+        }
+        const digest = existingDigest ?? {
+          profileId: candidate.profileId,
+          recipient,
+          pendingCandidates: [],
+          items: [],
+        };
+        if (!digest.pendingCandidates.some((item) => item.avopId === candidate.avopId)) {
+          digest.pendingCandidates.push(candidate);
+        }
+        recipientDigests.set(candidate.profileId, digest);
+      }
       continue;
     }
 
@@ -252,73 +318,168 @@ export async function runAvopNotificationJob(input: {
       continue;
     }
 
-    const reservationTokenHash = sha256Hex(randomBytes(32).toString('base64url'));
-    const reservation = await input.repository.reserve({
-      activityId: candidate.avopId,
+    const existingDigest = recipientDigests.get(candidate.profileId);
+    if (existingDigest && existingDigest.recipient !== recipient) {
+      throw new Error('Inconsistent recipient for AVOP notification profile.');
+    }
+    const digest = existingDigest ?? {
       profileId: candidate.profileId,
-      notificationType: decision.notificationType,
-      marker: decision.marker,
-      nextSendAt: decision.nextSendAt,
+      recipient,
+      pendingCandidates: [],
+      items: [],
+    };
+    if (digest.items.some((item) => item.candidate.avopId === candidate.avopId
+      && item.decision.marker === decision.marker)) {
+      report.deduplicated += 1;
+      continue;
+    }
+    if (!digest.pendingCandidates.some((item) => item.avopId === candidate.avopId)) {
+      digest.pendingCandidates.push(candidate);
+    }
+    digest.items.push({ candidate, decision });
+    recipientDigests.set(candidate.profileId, digest);
+  }
+
+  for (const digest of recipientDigests.values()) {
+    if (digest.items.length === 0) continue;
+    digest.items.sort(compareDigestItems);
+    digest.pendingCandidates.sort(compareCandidates);
+    const reservationTokenHash = sha256Hex(randomBytes(32).toString('base64url'));
+    const reserved = await input.repository.reserveDigest({
+      profileId: digest.profileId,
+      items: digest.items.map(({ candidate, decision }) => ({
+        activityId: candidate.avopId,
+        notificationType: decision.notificationType,
+        marker: decision.marker,
+        nextSendAt: decision.nextSendAt,
+      })),
       reservationTokenHash,
       reservedUntil: new Date(now.getTime() + reserveSeconds * 1000),
       now,
     });
-    if (!reservation) {
-      report.skipped += 1;
+    if (reserved.length === 0) {
+      report.skipped += digest.items.length;
       continue;
     }
-    report.reserved += 1;
+    if (reserved.length !== digest.items.length) {
+      throw new Error('Incomplete AVOP notification digest reservation.');
+    }
+    report.reserved += reserved.length;
 
-    const message = buildAvopNotificationEmail({
-      avopNumber: candidate.avopNumber,
-      title: candidate.title,
-      marker: decision.marker,
-      acknowledgementUrl: buildAvopAcknowledgementUrl(input.baseUrl, candidate.avopId),
+    const reservedByItem = new Map(reserved.map((item) => [digestItemKey(item.activityId, item.marker), item]));
+    const resultItems = digest.items.map(({ candidate, decision }) => {
+      const reservedItem = reservedByItem.get(digestItemKey(candidate.avopId, decision.marker));
+      if (!reservedItem) throw new Error('Reserved AVOP notification item not found.');
+      return {
+        ...reservedItem,
+        idempotencyKey: buildNotificationIdempotencyKey(
+          candidate.avopId,
+          candidate.profileId,
+          decision.marker,
+          input.dryRun ? 'DRY_RUN' : 'SENT',
+        ),
+      };
     });
+    const digestIdempotencyKey = buildDigestIdempotencyKey(
+      digest.profileId,
+      resultItems,
+      input.dryRun ? 'DRY_RUN' : 'SENT',
+    );
+
+    let providerMessageId: string | null;
     try {
+      const message = buildAvopNotificationDigestEmail({
+        items: digest.pendingCandidates.map((candidate) => ({
+          avopNumber: candidate.avopNumber,
+          title: candidate.title,
+          marker: digest.items.find((item) => item.candidate.avopId === candidate.avopId)?.decision.marker ?? 'INITIAL',
+          acknowledgementUrl: buildAvopAcknowledgementUrl(input.baseUrl, candidate.avopId),
+        })),
+      });
       const sendResult = input.dryRun
         ? { providerMessageId: null }
-        : await input.sender.send({ to: recipient, subject: message.subject, body: message.body });
-      const recorded = await input.repository.recordResult({
-        scheduleId: reservation.scheduleId,
-        activityId: candidate.avopId,
-        profileId: candidate.profileId,
-        recipient,
-        notificationType: decision.notificationType,
-        marker: decision.marker,
-        result: input.dryRun ? 'DRY_RUN' : 'SENT',
-        idempotencyKey: buildNotificationIdempotencyKey(candidate.avopId, candidate.profileId, decision.marker, input.dryRun ? 'DRY_RUN' : 'SENT'),
-        providerMessageId: sendResult.providerMessageId,
-        nextSendAt: decision.nextSendAt,
-        now,
-      });
-      if (!recorded.logged) report.deduplicated += 1;
-      else if (input.dryRun) report.simulated += 1;
-      else report.sent += 1;
+        : await input.sender.send({ to: digest.recipient, subject: message.subject, body: message.body });
+      providerMessageId = sendResult.providerMessageId;
     } catch (error) {
       const permanent = error instanceof PermanentEmailError;
-      const recorded = await input.repository.recordResult({
-        scheduleId: reservation.scheduleId,
-        activityId: candidate.avopId,
-        profileId: candidate.profileId,
-        recipient,
-        notificationType: decision.notificationType,
-        marker: decision.marker,
+      const errorResult = permanent ? 'PERMANENT_ERROR' : 'TEMPORARY_ERROR';
+      const errorItems = resultItems.map((item) => ({
+        ...item,
+        idempotencyKey: buildNotificationIdempotencyKey(item.activityId, digest.profileId, item.marker, errorResult),
+      }));
+      const recorded = await input.repository.recordDigestResult({
+        profileId: digest.profileId,
+        recipient: digest.recipient,
+        reservationTokenHash,
+        digestIdempotencyKey: buildDigestIdempotencyKey(digest.profileId, errorItems, errorResult),
+        items: errorItems,
         result: permanent ? 'PERMANENT_ERROR' : 'TEMPORARY_ERROR',
-        idempotencyKey: buildNotificationIdempotencyKey(candidate.avopId, candidate.profileId, decision.marker, permanent ? 'PERMANENT_ERROR' : 'TEMPORARY_ERROR'),
         error: 'Falha ao processar notificação de AVOP.',
         errorKind: permanent ? 'PERMANENT' : 'TEMPORARY',
-        nextSendAt: permanent ? null : now,
         stopReason: permanent ? 'PERMANENT_EMAIL_ERROR' : null,
         now,
       });
-      if (!recorded.logged) report.deduplicated += 1;
-      else if (permanent) report.permanentErrors += 1;
-      else report.temporaryErrors += 1;
+      report.deduplicated += errorItems.length - recorded.logged;
+      if (recorded.logged > 0 && permanent) report.permanentErrors += 1;
+      else if (recorded.logged > 0) report.temporaryErrors += 1;
+      continue;
+    }
+
+    const recorded = await input.repository.recordDigestResult({
+      profileId: digest.profileId,
+      recipient: digest.recipient,
+      reservationTokenHash,
+      digestIdempotencyKey,
+      items: resultItems,
+      result: input.dryRun ? 'DRY_RUN' : 'SENT',
+      providerMessageId,
+      now,
+    });
+    report.deduplicated += resultItems.length - recorded.logged;
+    if (input.dryRun) {
+      if (recorded.logged > 0) report.simulated += 1;
+      report.itemsSimulated += recorded.logged;
+    } else {
+      report.sent += 1;
+      report.itemsSent += recorded.logged;
     }
   }
 
   return report;
+}
+
+export function buildAvopNotificationDigestEmail(input: {
+  items: Array<{
+    avopNumber: string;
+    title: string;
+    marker: AvopNotificationMarker;
+    acknowledgementUrl: string;
+  }>;
+}): { subject: string; body: string } {
+  if (input.items.length === 0) throw new PermanentEmailError('Digest sem pendências de AVOP.');
+  if (input.items.length === 1) return buildAvopNotificationEmail(input.items[0]);
+
+  const itemLines = input.items.flatMap((item, index) => [
+    `${index + 1}. ${safeBodyLine(item.avopNumber)} — ${safeBodyLine(item.title)}`,
+    `   Acesso: ${safeBodyLine(item.acknowledgementUrl)}`,
+    '',
+  ]);
+
+  return {
+    subject: 'Central Operacional — AVOPs pendentes de ciência',
+    body: [
+      'Prezado(a),',
+      '',
+      'Os seguintes AVOPs estão pendentes de leitura e ciência:',
+      '',
+      ...itemLines,
+      'A abertura dos documentos não registra ciência automaticamente. Após cada leitura, utilize o campo próprio da Central para confirmar a ciência.',
+      '',
+      'Caso alguma ciência já tenha sido registrada, desconsidere o item correspondente.',
+      '',
+      'Esta é uma mensagem automática da Central Operacional.',
+    ].join('\n'),
+  };
 }
 
 export function buildAvopNotificationEmail(input: {
@@ -374,6 +535,17 @@ export function buildNotificationIdempotencyKey(activityId: string, profileId: s
   return sha256Hex(['AVOP', activityId, profileId, marker, result].join('|'));
 }
 
+export function buildDigestIdempotencyKey(
+  profileId: string,
+  items: Array<{ activityId: string; marker: AvopNotificationMarker }>,
+  result: string,
+): string {
+  const itemKeys = items
+    .map((item) => digestItemKey(item.activityId, item.marker))
+    .sort();
+  return sha256Hex(['AVOP_DIGEST', profileId, result, ...itemKeys].join('|'));
+}
+
 export function isSimpleEmailAddress(value: string): boolean {
   return value.trim() === value
     && !/[\x00-\x20\x7F,;]/.test(value)
@@ -427,4 +599,30 @@ function lastMarker(markers: AvopNotificationMarker[]): AvopNotificationMarker {
 
 function sha256Hex(value: string): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function digestItemKey(activityId: string, marker: AvopNotificationMarker): string {
+  return `${activityId}:${marker}`;
+}
+
+function compareDigestItems(
+  left: { candidate: AvopNotificationCandidate },
+  right: { candidate: AvopNotificationCandidate },
+): number {
+  return left.candidate.publicationDate.localeCompare(right.candidate.publicationDate)
+    || left.candidate.avopNumber.localeCompare(right.candidate.avopNumber, 'pt-BR')
+    || left.candidate.avopId.localeCompare(right.candidate.avopId);
+}
+
+function compareCandidates(left: AvopNotificationCandidate, right: AvopNotificationCandidate): number {
+  return left.publicationDate.localeCompare(right.publicationDate)
+    || left.avopNumber.localeCompare(right.avopNumber, 'pt-BR')
+    || left.avopId.localeCompare(right.avopId);
+}
+
+function safeBodyLine(value: string): string {
+  if (!value || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\r\n]/.test(value)) {
+    throw new PermanentEmailError('Conteúdo inválido para mensagem de AVOP.');
+  }
+  return value;
 }
