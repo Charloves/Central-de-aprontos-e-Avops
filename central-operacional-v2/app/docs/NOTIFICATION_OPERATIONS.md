@@ -57,6 +57,16 @@ Regras preservadas:
 - reserva transacional e chave idempotente por destinatário, AVOP, marco e resultado;
 - `DRY_RUN` não consome o marco real, não incrementa `send_count` e não atualiza `last_sent_at`.
 
+### Digest por destinatário
+
+O processamento agrupa todas as pendências do ciclo por perfil e endereço de e-mail. Cada militar recebe, no máximo, uma mensagem por execução, contendo a lista dos AVOPs pendentes e o link individual para leitura e ciência. Dois militares diferentes continuam recebendo mensagens separadas.
+
+As RPCs `reserve_avop_notification_digest` e `record_avop_notification_digest_result` operam o conjunto de itens de forma atômica. A reserva é tudo-ou-nada por perfil; a finalização grava um log por AVOP/marco na mesma transação. Repetições e execuções concorrentes não dividem o mesmo digest nem consomem parcialmente os marcos. O `provider_message_id` pode aparecer em mais de uma linha porque todas representam itens da mesma mensagem consolidada.
+
+O limite defensivo é de 100 AVOPs por digest. Conteúdo operacional com CR, LF, NUL ou controles é rejeitado antes do Gmail. O corpo permanece texto simples UTF-8 e abrir um link não registra ciência.
+
+Existe um risco residual inerente à integração externa: se a Gmail API aceitar a mensagem e a confirmação transacional no banco falhar antes do commit, uma tentativa posterior pode reenviar o digest. Por isso, a ativação real exige monitoramento do primeiro ciclo e retorno imediato para `dry-run` diante de falha de persistência.
+
 ## Monitoramento
 
 O endpoint `GET /api/health/notifications` exige o mesmo `CRON_SECRET` do cron e retorna apenas métricas agregadas:
