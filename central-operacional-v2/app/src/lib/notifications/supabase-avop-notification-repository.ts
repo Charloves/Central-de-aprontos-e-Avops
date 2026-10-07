@@ -5,8 +5,10 @@ import { createServerSupabaseClient } from '@/lib/db/client';
 import type {
   AvopNotificationCandidate,
   AvopNotificationMarker,
+  AvopNotificationReservationItem,
   AvopNotificationRepository,
   AvopNotificationResult,
+  AvopNotificationResultItem,
   AvopNotificationStopReason,
   AvopNotificationType,
   ReservedAvopNotification,
@@ -128,6 +130,80 @@ export class SupabaseAvopNotificationRepository implements AvopNotificationRepos
     return {
       logged: Boolean(row?.logged),
       stopped: Boolean(row?.stopped),
+    };
+  }
+
+  async reserveDigest(input: {
+    profileId: string;
+    items: AvopNotificationReservationItem[];
+    reservationTokenHash: string;
+    reservedUntil: Date;
+    now: Date;
+  }) {
+    const { data, error } = await this.client.rpc('reserve_avop_notification_digest', {
+      p_profile_id: input.profileId,
+      p_items: input.items.map((item) => ({
+        activity_id: item.activityId,
+        notification_type: item.notificationType,
+        marker: item.marker,
+        next_send_at: item.nextSendAt?.toISOString() ?? null,
+      })),
+      p_reservation_token_hash: input.reservationTokenHash,
+      p_reserved_until: input.reservedUntil.toISOString(),
+      p_now: input.now.toISOString(),
+    });
+    if (error) throw error;
+    if (!Array.isArray(data)) throw new Error('Invalid AVOP digest reservation response.');
+    return (data as Array<Record<string, unknown>>).map((row) => ({
+      scheduleId: String(row.schedule_id),
+      activityId: String(row.activity_id),
+      notificationType: String(row.notification_type) as AvopNotificationType,
+      marker: String(row.marker) as AvopNotificationMarker,
+      nextSendAt: row.next_send_at ? new Date(String(row.next_send_at)) : null,
+    }));
+  }
+
+  async recordDigestResult(input: {
+    profileId: string;
+    recipient: string;
+    reservationTokenHash: string;
+    digestIdempotencyKey: string;
+    items: AvopNotificationResultItem[];
+    result: AvopNotificationResult;
+    providerMessageId?: string | null;
+    error?: string | null;
+    errorKind?: 'TEMPORARY' | 'PERMANENT' | 'CONFIGURATION' | 'VALIDATION' | null;
+    stopReason?: AvopNotificationStopReason | null;
+    now: Date;
+  }): Promise<{ logged: number; stopped: number }> {
+    const { data, error } = await this.client.rpc('record_avop_notification_digest_result', {
+      p_profile_id: input.profileId,
+      p_recipient: input.recipient,
+      p_reservation_token_hash: input.reservationTokenHash,
+      p_digest_idempotency_key: input.digestIdempotencyKey,
+      p_items: input.items.map((item) => ({
+        schedule_id: item.scheduleId,
+        activity_id: item.activityId,
+        notification_type: item.notificationType,
+        marker: item.marker,
+        next_send_at: item.nextSendAt?.toISOString() ?? null,
+        idempotency_key: item.idempotencyKey,
+      })),
+      p_result: input.result,
+      p_provider_message_id: input.providerMessageId ?? null,
+      p_error: input.error ?? null,
+      p_error_kind: input.errorKind ?? null,
+      p_stop_reason: input.stopReason ?? null,
+      p_now: input.now.toISOString(),
+    });
+    if (error) throw error;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('Invalid AVOP digest result response.');
+    }
+    const row = data as Record<string, unknown>;
+    return {
+      logged: Number(row.logged_count ?? 0),
+      stopped: Number(row.stopped_count ?? 0),
     };
   }
 
