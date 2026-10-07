@@ -351,6 +351,72 @@ describe('avop email notification job', () => {
     expect(report).toMatchObject({ simulated: 1, itemsSimulated: 2, sent: 0 });
   });
 
+  it('encerra grande volume com concorrencia limitada antes dos digests', async () => {
+    const candidates = Array.from({ length: 120 }, (_, index) => ({
+      ...baseCandidate,
+      avopId: `acknowledged-${index}`,
+      avopNumber: `AVOP-HML-${String(index).padStart(3, '0')}`,
+      acknowledged: true,
+    }));
+    const repository = new FakeAvopNotificationRepository(candidates);
+    const originalStopSchedule = repository.stopSchedule.bind(repository);
+    let inFlight = 0;
+    let peakConcurrency = 0;
+    vi.spyOn(repository, 'stopSchedule').mockImplementation(async (input) => {
+      inFlight += 1;
+      peakConcurrency = Math.max(peakConcurrency, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      try {
+        await originalStopSchedule(input);
+      } finally {
+        inFlight -= 1;
+      }
+    });
+    const fakeSender = sender();
+
+    const report = await runAvopNotificationJob({
+      repository,
+      sender: fakeSender,
+      now: new Date('2026-01-31T12:00:00Z'),
+      baseUrl: 'https://central.example.test',
+      dryRun: true,
+      stopConcurrency: 8,
+    });
+
+    expect(report).toMatchObject({ scanned: 120, stopped: 120, sent: 0, simulated: 0 });
+    expect(repository.stopSchedule).toHaveBeenCalledTimes(120);
+    expect(peakConcurrency).toBeGreaterThan(1);
+    expect(peakConcurrency).toBeLessThanOrEqual(8);
+    expect(fakeSender.send).not.toHaveBeenCalled();
+  });
+
+  it('aguarda os workers de encerramento antes de propagar uma falha', async () => {
+    const candidates = Array.from({ length: 12 }, (_, index) => ({
+      ...baseCandidate,
+      avopId: `acknowledged-${index}`,
+      acknowledged: true,
+    }));
+    const repository = new FakeAvopNotificationRepository(candidates);
+    const originalStopSchedule = repository.stopSchedule.bind(repository);
+    let completed = 0;
+    vi.spyOn(repository, 'stopSchedule').mockImplementation(async (input) => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      if (input.activityId === 'acknowledged-2') throw new Error('falha controlada');
+      await originalStopSchedule(input);
+      completed += 1;
+    });
+
+    await expect(runAvopNotificationJob({
+      repository,
+      sender: sender(),
+      now: new Date('2026-01-31T12:00:00Z'),
+      baseUrl: 'https://central.example.test',
+      dryRun: true,
+      stopConcurrency: 4,
+    })).rejects.toThrow('falha controlada');
+    expect(completed).toBe(11);
+  });
+
   it('nao duplica envio em job repetido', async () => {
     const repository = new FakeAvopNotificationRepository([baseCandidate]);
     await runAvopNotificationJob({ repository, sender: sender(), now: new Date('2026-01-31T00:00:00Z'), baseUrl: 'https://central.example.test', dryRun: true });

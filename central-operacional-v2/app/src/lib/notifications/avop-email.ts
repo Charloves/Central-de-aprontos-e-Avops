@@ -235,9 +235,11 @@ export async function runAvopNotificationJob(input: {
   baseUrl: string;
   dryRun: boolean;
   reserveSeconds?: number;
+  stopConcurrency?: number;
 }): Promise<AvopNotificationJobReport> {
   const now = input.now ?? new Date();
   const reserveSeconds = input.reserveSeconds ?? 10 * 60;
+  const stopConcurrency = normalizeConcurrency(input.stopConcurrency ?? 12);
   const report: AvopNotificationJobReport = {
     dryRun: input.dryRun,
     scanned: 0,
@@ -254,6 +256,11 @@ export async function runAvopNotificationJob(input: {
   };
 
   const candidates = await input.repository.listCandidates(now);
+  const pendingStops: Array<{
+    candidate: AvopNotificationCandidate;
+    decision: Extract<AvopNotificationDecision, { action: 'STOP' }>;
+    recipient: string;
+  }> = [];
   const recipientDigests = new Map<string, {
     profileId: string;
     recipient: string;
@@ -269,16 +276,7 @@ export async function runAvopNotificationJob(input: {
     const decision = decideAvopNotification(candidate, now);
     const recipient = candidate.recipientEmail ?? '';
     if (decision.action === 'STOP') {
-      await input.repository.stopSchedule({
-        activityId: candidate.avopId,
-        profileId: candidate.profileId,
-        marker: decision.marker,
-        recipient: recipient || 'not-configured@example.test',
-        stopReason: decision.reason,
-        idempotencyKey: buildNotificationIdempotencyKey(candidate.avopId, candidate.profileId, decision.marker, 'STOPPED'),
-        now,
-      });
-      report.stopped += 1;
+      pendingStops.push({ candidate, decision, recipient });
       continue;
     }
 
@@ -339,6 +337,19 @@ export async function runAvopNotificationJob(input: {
     digest.items.push({ candidate, decision });
     recipientDigests.set(candidate.profileId, digest);
   }
+
+  await runWithConcurrency(pendingStops, stopConcurrency, async ({ candidate, decision, recipient }) => {
+    await input.repository.stopSchedule({
+      activityId: candidate.avopId,
+      profileId: candidate.profileId,
+      marker: decision.marker,
+      recipient: recipient || 'not-configured@example.test',
+      stopReason: decision.reason,
+      idempotencyKey: buildNotificationIdempotencyKey(candidate.avopId, candidate.profileId, decision.marker, 'STOPPED'),
+      now,
+    });
+  });
+  report.stopped += pendingStops.length;
 
   for (const digest of recipientDigests.values()) {
     if (digest.items.length === 0) continue;
@@ -625,4 +636,30 @@ function safeBodyLine(value: string): string {
     throw new PermanentEmailError('Conteúdo inválido para mensagem de AVOP.');
   }
   return value;
+}
+
+function normalizeConcurrency(value: number): number {
+  if (!Number.isInteger(value) || value < 1 || value > 32) {
+    throw new Error('Invalid notification stop concurrency.');
+  }
+  return value;
+}
+
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex];
+      nextIndex += 1;
+      await task(item);
+    }
+  };
+  const workerCount = Math.min(concurrency, items.length);
+  const results = await Promise.allSettled(Array.from({ length: workerCount }, () => worker()));
+  const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (failure) throw failure.reason;
 }
