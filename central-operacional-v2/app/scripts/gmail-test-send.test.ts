@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import { dirname, join } from 'node:path';
@@ -311,12 +311,27 @@ describe('controlled gmail test send', () => {
     expect(sender).not.toHaveBeenCalled();
   });
 
+  it('script npm usa certificados do sistema e as condicoes server-only', async () => {
+    const packageJson = JSON.parse(
+      await readFile(join(appDir, 'package.json'), 'utf8'),
+    ) as { scripts?: Record<string, string> };
+
+    expect(packageJson.scripts?.['gmail:test:send']).toBe(
+      'node --use-system-ca --conditions=react-server --experimental-strip-types scripts/gmail-test-send.ts',
+    );
+  });
+
   it('entrypoint real carrega modulos e falha antes do Gmail sem confirmacao', async () => {
     let result: { code?: number; stdout?: string; stderr?: string };
     try {
       result = await execFileAsync(
         process.execPath,
-        ['--conditions=react-server', '--experimental-strip-types', 'scripts/gmail-test-send.ts'],
+        [
+          '--use-system-ca',
+          '--conditions=react-server',
+          '--experimental-strip-types',
+          'scripts/gmail-test-send.ts',
+        ],
         {
           cwd: appDir,
           env: {
@@ -352,6 +367,7 @@ describe('controlled gmail test send', () => {
       result = await execFileAsync(
         process.execPath,
         [
+          '--use-system-ca',
           '--conditions=react-server',
           '--experimental-strip-types',
           join(appDir, 'scripts/gmail-test-send.ts'),

@@ -25,12 +25,12 @@
     "production:bootstrap-admin": "node --conditions=react-server --experimental-strip-types scripts/bootstrap-production-admin.ts",
     "gmail:oauth:check": "node --experimental-strip-types scripts/gmail-oauth-local.ts --check",
     "gmail:oauth:local": "node --experimental-strip-types scripts/gmail-oauth-local.ts --authorize",
-    "gmail:test:send": "node --conditions=react-server --experimental-strip-types scripts/gmail-test-send.ts"
+    "gmail:test:send": "node --use-system-ca --conditions=react-server --experimental-strip-types scripts/gmail-test-send.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "googleapis": "173.0.0",
-    "next": "15.5.24",
+    "next": "15.5.27",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "0.0.1",
