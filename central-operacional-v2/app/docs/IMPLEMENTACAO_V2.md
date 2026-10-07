@@ -97,20 +97,24 @@ A estratégia é intencionalmente conservadora:
 
 Migrations futuras que criarem novas FKs devem criar índice de apoio na mesma migration, salvo quando PK, unique constraint ou índice composto existente já cobrir as colunas da FK como prefixo inicial e na mesma ordem.
 
-## Overrides temporários de dependencias do Next
+## Overrides temporários de dependências do Next
 
-O projeto permanece em `next@15.5.22`.
+O projeto permanece em `next@15.5.24`.
 
-Foram aplicados overrides temporários e restritos a árvore do Next para:
+Foram aplicados overrides temporários e restritos à árvore do Next para:
 
 - `postcss@8.5.26`;
-- `sharp@0.35.3`.
+- `sharp@0.35.5`.
 
-Motivo: corrigir vulnerabilidades de produção apontadas pelo `npm audit` em dependencias transitivas usadas pelo Next, sem alterar a versão do framework nesta etapa.
+O override global `source-map-js@1.2.2` mantém as cópias transitivas do PostCSS em versão corrigida e compatível com os ranges declarados.
+
+Motivo: corrigir vulnerabilidades de produção apontadas pelo `npm audit` em dependências transitivas usadas pelo Next, sem alterar a versão do framework nesta etapa.
 
 Com esses overrides, a auditoria de produção (`npm audit --omit=dev --offline=false`) fica zerada.
 
-Obrigação futura: remover esses overrides quando uma versão futura do Next incorporar nativamente versões corrigidas e compativeis de PostCSS e Sharp.
+Em outubro de 2026, `braces@3.0.3`, usado somente pela cadeia de lint `eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch`, recebeu um advisory sem versão corrigida disponível. O gate `npm run audit:ci` exige auditoria de produção zerada e admite temporariamente somente esse advisory dev-only e sua cadeia de efeitos. Qualquer vulnerabilidade adicional ou mudança no advisory faz o CI falhar. A exceção deve ser removida assim que o upstream publicar uma versão corrigida.
+
+Obrigação futura: remover esses overrides quando uma versão futura do Next incorporar nativamente versões corrigidas e compatíveis de PostCSS e Sharp.
 
 ## Migration 0002
 

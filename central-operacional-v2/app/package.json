@@ -11,6 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "audit:ci": "node --experimental-strip-types scripts/validate-dependency-audit.ts",
     "typecheck": "tsc --noEmit",
     "import:dry-run": "node --experimental-strip-types scripts/import-dry-run.ts --efetivo fixtures/import/efetivo.csv --avops fixtures/import/avops.csv --leituras fixtures/import/leituras.csv --aprontos fixtures/import/aprontos.csv --presencas fixtures/import/presencas.csv --oi-h50 fixtures/import/oi_h50.csv --oi-h125 fixtures/import/oi_h125.csv --email-log fixtures/import/email_log.csv --acessos-log fixtures/import/acessos_log.csv",
     "test": "vitest run",
@@ -47,12 +48,13 @@
     "vitest": "4.1.11"
   },
   "overrides": {
+    "source-map-js": "1.2.2",
     "next": {
       "postcss": "8.5.26",
-      "sharp": "0.35.4"
+      "sharp": "0.35.5"
     }
   },
   "allowScripts": {
-    "sharp@0.35.4": true
+    "sharp@0.35.5": true
   }
 }

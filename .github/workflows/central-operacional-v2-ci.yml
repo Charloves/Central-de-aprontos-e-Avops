@@ -58,4 +58,4 @@ jobs:
         run: npm run build
 
       - name: Audit
-        run: npm audit --offline=false --audit-level=moderate
+        run: npm run audit:ci

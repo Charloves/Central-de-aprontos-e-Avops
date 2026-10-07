@@ -3,7 +3,7 @@ import sharp from 'sharp';
 
 describe('sharp runtime', () => {
   it('carrega o binario nativo no Windows e processa imagem em memoria', async () => {
-    expect(sharp.versions.sharp).toBe('0.35.4');
+    expect(sharp.versions.sharp).toBe('0.35.5');
 
     const input = await sharp({
       create: {
