@@ -25,7 +25,7 @@ with source_candidates as (
       substring(c.drive_url from '[?&]id=([^&#]+)')
     ) as drive_file_id
   from source_candidates c
-  where c.drive_url ~ '^https://drive\.google\.com(?:/|$)'
+  where c.drive_url ~ '^https://drive[.]google[.]com(/|$)'
 )
 update public.avops a
    set drive_url = c.drive_url,
@@ -35,7 +35,7 @@ update public.avops a
  where a.id = c.avop_id
    and c.drive_file_id is not null
    and (
-     a.drive_url !~ '^https://drive\.google\.com(?:/|$)'
+     a.drive_url !~ '^https://drive[.]google[.]com(/|$)'
      or coalesce(
        substring(a.drive_url from '/file/d/([^/?#]+)'),
        substring(a.drive_url from '[?&]id=([^&#]+)')
@@ -55,7 +55,7 @@ begin
        and r.migrated = true
        and r.resolved_entity_type = 'avop'
        and (
-         a.drive_url !~ '^https://drive\.google\.com(?:/|$)'
+         a.drive_url !~ '^https://drive[.]google[.]com(/|$)'
          or coalesce(
            substring(a.drive_url from '/file/d/([^/?#]+)'),
            substring(a.drive_url from '[?&]id=([^&#]+)')
