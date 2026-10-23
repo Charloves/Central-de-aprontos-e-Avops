@@ -42,6 +42,8 @@ describe('legacy importers', () => {
         AVOP_ID: 'AVOP-2026-01',
         TITULO: 'Procedimento ficticio',
         DATA_EMISSAO: '22/04/2026',
+        LINK_PDF: 'https://drive.google.com/file/d/fake-avop-01/view',
+        WEBAPP_URL: 'https://example.test/legacy-avop-01',
         STATUS: 'ATIVO',
         PERFIL_ALVO: 'PILOTO E HSAR',
         EXIGE_CIENCIA: 'SIM',
@@ -55,6 +57,8 @@ describe('legacy importers', () => {
       payload: {
         number: 'AVOP 01-2026',
         publicationDate: '2026-04-22',
+        webappUrl: 'https://drive.google.com/file/d/fake-avop-01/view',
+        driveFileId: 'fake-avop-01',
         targetAudiences: ['PILOTO', 'HSAR'],
       },
     });
@@ -81,6 +85,7 @@ describe('legacy importers', () => {
         AVOP_ID: 'AVOP 01-2026',
         TITULO: 'Procedimento ficticio',
         DATA_EMISSAO: input,
+        LINK_PDF: 'https://drive.google.com/open?id=fake-avop-01',
         STATUS: 'ATIVO',
         PERFIL_ALVO: 'PILOTO',
         EXIGE_CIENCIA: 'SIM',
@@ -96,6 +101,7 @@ describe('legacy importers', () => {
         AVOP_ID: 'AVOP 01-2026',
         TITULO: 'Procedimento ficticio',
         DATA_EMISSAO: '31/02/2026',
+        LINK_PDF: 'https://drive.google.com/file/d/fake-avop-01/view',
         STATUS: 'ATIVO',
         PERFIL_ALVO: 'PILOTO',
         EXIGE_CIENCIA: 'SIM',
@@ -124,6 +130,7 @@ describe('legacy importers', () => {
           AVOP_ID: 'AVOP 01-2026',
           TITULO: 'Procedimento ficticio',
           DATA_EMISSAO: '2026-04-22',
+          LINK_PDF: 'https://drive.google.com/file/d/fake-avop-01/view',
           STATUS: 'ATIVO',
           PERFIL_ALVO: 'PILOTO',
           EXIGE_CIENCIA: 'SIM',
@@ -133,6 +140,45 @@ describe('legacy importers', () => {
 
     expect(report.dryRun).toBe(true);
     expect(report.totals).toMatchObject({ read: 2, valid: 2, invalid: 0, operations: 2 });
+  });
+
+  it('rejeita AVOP sem link de documento mesmo quando WEBAPP_URL existe', () => {
+    const result = parseAvops([{
+      AVOP_ID: 'AVOP 04-2026',
+      TITULO: 'Procedimento ficticio',
+      DATA_EMISSAO: '2026-04-22',
+      WEBAPP_URL: 'https://script.google.com/macros/s/fake/exec?avop=04',
+      STATUS: 'ATIVO',
+      PERFIL_ALVO: 'PILOTO',
+      EXIGE_CIENCIA: 'SIM',
+    }]);
+
+    expect(result).toMatchObject({ valid: 0, invalid: 1 });
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'MISSING_VALUE' }),
+    ]));
+  });
+
+  it.each([
+    'http://drive.google.com/file/d/fake/view',
+    'https://drive.google.com.evil.test/file/d/fake/view',
+    'https://user:pass@drive.google.com/file/d/fake/view',
+    'javascript:alert(1)',
+  ])('rejeita link inseguro de documento AVOP: %s', (link) => {
+    const result = parseAvops([{
+      AVOP_ID: 'AVOP 05-2026',
+      TITULO: 'Procedimento ficticio',
+      DATA_EMISSAO: '2026-04-22',
+      LINK_PDF: link,
+      STATUS: 'ATIVO',
+      PERFIL_ALVO: 'PILOTO',
+      EXIGE_CIENCIA: 'SIM',
+    }]);
+
+    expect(result).toMatchObject({ valid: 0, invalid: 1 });
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'INVALID_DRIVE_URL' }),
+    ]));
   });
 
   it('redact oculta nome, email e chaves operacionais identificaveis', () => {

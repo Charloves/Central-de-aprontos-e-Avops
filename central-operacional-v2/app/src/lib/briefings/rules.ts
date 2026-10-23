@@ -5,6 +5,16 @@ export const BRIEFING_TIME_ZONE = 'America/Sao_Paulo';
 export const MIN_JUSTIFICATION_LENGTH = 3;
 export const MAX_JUSTIFICATION_LENGTH = 500;
 
+const briefingIdentifierCollator = new Intl.Collator('pt-BR', {
+  numeric: true,
+  sensitivity: 'base',
+});
+
+export type BriefingSituationIndicator = {
+  icon: '✅' | '‼️' | '➖';
+  label: string;
+};
+
 export function isBriefingApplicable(profileAudiences: string[], briefingAudiences: string[]): boolean {
   return hasAudienceIntersection(profileAudiences, briefingAudiences);
 }
@@ -50,6 +60,33 @@ export function getMaterialLabel(briefing: BriefingListItem): string {
   if (!briefing.requiresMaterialAcknowledgement) return 'Ciência não exigida';
   if (briefing.record?.materialAcknowledged) return 'Material ciente';
   return 'Ciência pendente';
+}
+
+export function compareBriefingsByIdentifier(a: BriefingListItem, b: BriefingListItem): number {
+  return briefingIdentifierCollator.compare(a.legacyId, b.legacyId);
+}
+
+export function getBriefingSituationIndicators(briefing: BriefingListItem): BriefingSituationIndicator[] {
+  const attendance = getAttendanceLabel(briefing.record);
+  const attendanceComplete = attendance === 'Presente' || attendance === 'Justificado';
+  const justificationRequired = attendance === 'Falta';
+
+  return [
+    {
+      icon: attendanceComplete ? '✅' : '‼️',
+      label: `Presença: ${attendance}`,
+    },
+    briefing.latestJustification
+      ? { icon: '✅', label: 'Justificativa registrada' }
+      : justificationRequired
+        ? { icon: '‼️', label: 'Justificativa pendente' }
+        : { icon: '➖', label: 'Justificativa não aplicável' },
+    !briefing.requiresMaterialAcknowledgement
+      ? { icon: '➖', label: 'Ciência de material não exigida' }
+      : briefing.record?.materialAcknowledged
+        ? { icon: '✅', label: 'Ciência de material registrada' }
+        : { icon: '‼️', label: 'Ciência de material pendente' },
+  ];
 }
 
 export function canAcknowledgeMaterial(briefing: BriefingListItem): boolean {

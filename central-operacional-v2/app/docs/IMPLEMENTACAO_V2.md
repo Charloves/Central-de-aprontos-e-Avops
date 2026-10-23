@@ -130,6 +130,8 @@ Quando a origem for migração e não houver evidência confiável do perfil vig
 
 Use `npm run import:dry-run -- --redact` quando o relatorio precisar ser compartilhado sem expor nome, e-mail, justificativas, chaves operacionais derivadas de dados pessoais ou textos operacionais de OI. O formato esperado dos arquivos esta documentado em `docs/IMPORTACAO_DRY_RUN.md`.
 
+Para AVOPs, o documento vem de `LINK_PDF`, com `PDF_URL` como fallback. `WEBAPP_URL` aponta para a aplicacao legada e nao pode ser usado como `drive_url`. A migration `20261023142643_repair_avop_document_links.sql` corrige apenas AVOPs importados com link atual invalido, recupera o documento do conteudo historico imutavel e preserva qualquer link valido cadastrado manualmente. A migration falha de forma fechada se algum AVOP importado continuar sem um link reconhecido de `drive.google.com`.
+
 ## Consulta OI pura
 
 As regras puras de consulta de OI funcionam sobre metadados ja importados em memoria, sem interface e sem banco real.

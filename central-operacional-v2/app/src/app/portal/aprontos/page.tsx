@@ -1,10 +1,7 @@
 import Link from 'next/link';
 import { requireSession } from '@/lib/auth/server';
 import {
-  getAttendanceLabel,
-  getBriefingStatusLabel,
-  getJustificationLabel,
-  getMaterialLabel,
+  getBriefingSituationIndicators,
   isValidBriefingMaterialUrl,
   MAX_JUSTIFICATION_LENGTH,
   MIN_JUSTIFICATION_LENGTH,
@@ -34,6 +31,12 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
             <p className="muted">Módulo Aprontos</p>
             <h1>Aprontos aplicáveis</h1>
             <p className="muted">Somente aprontos destinados aos seus públicos atuais são exibidos.</p>
+            <p className="briefing-status-legend" aria-label="Legenda da situação individual">
+              <span>Ordem: presença, justificativa e material.</span>
+              <span>✅ Concluído</span>
+              <span>‼️ Pendente</span>
+              <span>➖ Não se aplica</span>
+            </p>
           </div>
           <Link className="button secondary" href="/portal">Voltar ao portal</Link>
         </div>
@@ -55,8 +58,6 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
                 <tr>
                   <th>Apronto</th>
                   <th>Data</th>
-                  <th>Público</th>
-                  <th>Situação</th>
                   <th>Minha situação</th>
                   <th>Material</th>
                   <th>Ações</th>
@@ -74,16 +75,14 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
                         <span className="muted">{briefing.title}</span>
                       </td>
                       <td>{briefing.eventDate ? formatDate(briefing.eventDate) : 'Data inválida'}</td>
-                      <td>{briefing.audiences.join(', ') || 'Não definido'}</td>
                       <td>
-                        <span className={briefing.effectiveStatus === 'OPEN' ? 'badge ok' : 'badge pending'}>
-                          {getBriefingStatusLabel(briefing.status, briefing.effectiveStatus)}
+                        <span className="briefing-status-icons">
+                          {getBriefingSituationIndicators(briefing).map((indicator) => (
+                            <span key={indicator.label} role="img" aria-label={indicator.label} title={indicator.label}>
+                              {indicator.icon}
+                            </span>
+                          ))}
                         </span>
-                      </td>
-                      <td>
-                        <p className="compact"><strong>{getAttendanceLabel(briefing.record)}</strong></p>
-                        <p className="compact muted">{getJustificationLabel(briefing)}</p>
-                        <p className="compact muted">{getMaterialLabel(briefing)}</p>
                       </td>
                       <td>
                         {validMaterial && briefing.driveUrl ? (

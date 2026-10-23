@@ -72,7 +72,9 @@ export type AvopPayload = {
   title: string;
   publicationDate: string;
   deadlineDays: number | null;
-  webappUrl: string | null;
+  // Kept for compatibility with the deployed import RPC; contains the Drive document URL.
+  webappUrl: string;
+  driveFileId: string;
   status: string;
   targetAudiences: string[];
   requiresAcknowledgement: boolean;
