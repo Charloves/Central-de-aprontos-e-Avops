@@ -19,12 +19,13 @@ describe('AVOP legacy document link repair migration', () => {
     expect(migration).toContain('r.migrated = true');
     expect(migration).toContain("r.resolved_entity_type = 'avop'");
     expect(migration).toContain('update public.avops a');
-    expect(migration).toContain("a.drive_url !~ '^https://drive\\.google\\.com(?:/|$)'");
+    expect(migration).toContain("a.drive_url !~ '^https://drive[.]google[.]com(/|$)'");
     expect(migration).toContain('c.drive_file_id is not null');
   });
 
   it('accepts only exact HTTPS Google Drive hosts with a recognized file ID', () => {
-    expect(migration).toContain("c.drive_url ~ '^https://drive\\.google\\.com(?:/|$)'");
+    expect(migration).toContain("c.drive_url ~ '^https://drive[.]google[.]com(/|$)'");
+    expect(migration).not.toContain('(?:');
     expect(migration).toContain("substring(c.drive_url from '/file/d/([^/?#]+)')");
     expect(migration).toContain("substring(c.drive_url from '[?&]id=([^&#]+)')");
   });
