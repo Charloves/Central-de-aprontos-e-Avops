@@ -80,8 +80,15 @@ Colunas opcionais reconhecidas:
 
 - `PRAZO_DIAS`
 - `WEBAPP_URL`
+- `LINK_PDF`
+- `PDF_URL`
 
-Regra: identificadores como `AVOP-2026-01` e `AVOP 01-2026` sao normalizados para `AVOP 01-2026`.
+Regra: `LINK_PDF`, quando preenchido, tem prioridade sobre `PDF_URL`. `WEBAPP_URL` identifica a aplicacao legada e
+nao e usado como documento na V2. O link do documento deve usar HTTPS, hostname exato `drive.google.com` e um dos
+formatos reconhecidos pelo legado (`/file/d/{id}`, `open?id={id}` ou `uc?...&id={id}`). Link ausente ou inseguro
+invalida a linha, sem inventar ou substituir silenciosamente o documento.
+
+Identificadores como `AVOP-2026-01` e `AVOP 01-2026` sao normalizados para `AVOP 01-2026`.
 
 Datas aceitas:
 

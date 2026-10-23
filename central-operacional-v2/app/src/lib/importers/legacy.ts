@@ -395,6 +395,8 @@ function parseAvopRow(row: RawRow, rowNumber: number): ParsedRow<AvopPayload> {
   const targetAudiences = normalizeAudienceList(row.PERFIL_ALVO);
   const requiresAcknowledgement = parseYesNo(row.EXIGE_CIENCIA);
   const deadlineDays = normalizeText(row.PRAZO_DIAS) ? Number(row.PRAZO_DIAS) : null;
+  const driveUrl = normalizeText(row.LINK_PDF) || normalizeText(row.PDF_URL);
+  const driveFileId = extractDriveFileId(driveUrl);
   const issues = requiredValueIssues('AVOPS', rowNumber, row, [
     ['AVOP_ID', number],
     ['TITULO', title],
@@ -402,6 +404,7 @@ function parseAvopRow(row: RawRow, rowNumber: number): ParsedRow<AvopPayload> {
     ['STATUS', status],
     ['PERFIL_ALVO', targetAudiences.join(',')],
     ['EXIGE_CIENCIA', normalizeText(row.EXIGE_CIENCIA)],
+    ['LINK_PDF/PDF_URL', driveUrl],
   ]);
 
   if (requiresAcknowledgement === null) {
@@ -414,6 +417,16 @@ function parseAvopRow(row: RawRow, rowNumber: number): ParsedRow<AvopPayload> {
     );
   }
 
+  if (driveUrl && !isValidLegacyDriveDocumentUrl(driveUrl, driveFileId)) {
+    issues.push(errorIssue(
+      'AVOPS',
+      rowNumber,
+      'INVALID_DRIVE_URL',
+      'LINK_PDF/PDF_URL deve ser um link HTTPS valido de drive.google.com com identificador de arquivo.',
+      row,
+    ));
+  }
+
   if (issues.length) return { ok: false, issues };
 
   const payload: AvopPayload = {
@@ -421,7 +434,8 @@ function parseAvopRow(row: RawRow, rowNumber: number): ParsedRow<AvopPayload> {
     title,
     publicationDate,
     deadlineDays,
-    webappUrl: normalizeText(row.WEBAPP_URL) || null,
+    webappUrl: driveUrl,
+    driveFileId: driveFileId!,
     status,
     targetAudiences,
     requiresAcknowledgement: requiresAcknowledgement === true,
@@ -441,6 +455,19 @@ function parseAvopRow(row: RawRow, rowNumber: number): ParsedRow<AvopPayload> {
       original: row,
     },
   };
+}
+
+function isValidLegacyDriveDocumentUrl(value: string, driveFileId: string | null): boolean {
+  if (!driveFileId) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && url.hostname === 'drive.google.com'
+      && !url.username
+      && !url.password;
+  } catch {
+    return false;
+  }
 }
 
 function parseLeituraRow(row: RawRow, rowNumber: number): ParsedRow<LeituraPayload> {
