@@ -29,6 +29,11 @@ type CandidateRow = {
   sent_markers: string[] | null;
 };
 
+type ProfileLabelRow = {
+  id: string;
+  trigram: string;
+};
+
 export class SupabaseAvopNotificationRepository implements AvopNotificationRepository {
   constructor(private readonly client: SupabaseClient = createServerSupabaseClient()) {}
 
@@ -38,13 +43,27 @@ export class SupabaseAvopNotificationRepository implements AvopNotificationRepos
       p_today: date,
     });
     if (error) throw error;
-    return ((data ?? []) as CandidateRow[]).map((row) => ({
+    const rows = (data ?? []) as CandidateRow[];
+    const profileIds = [...new Set(rows.map((row) => row.profile_id))];
+    const labels = new Map<string, string>();
+    if (profileIds.length > 0) {
+      const { data: profiles, error: profilesError } = await this.client
+        .from('profiles')
+        .select('id,trigram')
+        .in('id', profileIds);
+      if (profilesError) throw profilesError;
+      for (const profile of (profiles ?? []) as ProfileLabelRow[]) {
+        labels.set(profile.id, profile.trigram);
+      }
+    }
+    return rows.map((row) => ({
       avopId: row.avop_id,
       avopNumber: row.avop_number,
       title: row.title,
       publicationDate: row.publication_date,
       status: row.status,
       profileId: row.profile_id,
+      recipientLabel: labels.get(row.profile_id) ?? null,
       recipientEmail: row.recipient_email,
       profileActive: row.profile_active,
       applicableNow: row.applicable_now,

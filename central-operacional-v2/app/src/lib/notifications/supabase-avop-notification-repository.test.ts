@@ -4,6 +4,39 @@ import { SupabaseAvopNotificationRepository } from './supabase-avop-notification
 vi.mock('server-only', () => ({}));
 
 describe('SupabaseAvopNotificationRepository recipient digest', () => {
+  it('enriquece candidatos com o trigrama atual sem alterar a RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{
+        avop_id: 'avop-1',
+        avop_number: 'AVOP 01-2026',
+        title: 'AVOP fictício',
+        publication_date: '2026-10-01',
+        status: 'PUBLISHED',
+        profile_id: 'profile-1',
+        recipient_email: 'militar@example.test',
+        profile_active: true,
+        applicable_now: true,
+        acknowledged: false,
+        sent_markers: [],
+      }],
+      error: null,
+    });
+    const query = {
+      select: vi.fn(),
+      in: vi.fn().mockResolvedValue({ data: [{ id: 'profile-1', trigram: 'CHA' }], error: null }),
+    };
+    query.select.mockReturnValue(query);
+    const from = vi.fn().mockReturnValue(query);
+    const repository = new SupabaseAvopNotificationRepository({ rpc, from } as never);
+
+    await expect(repository.listCandidates(new Date('2026-10-01T12:00:00Z'))).resolves.toEqual([
+      expect.objectContaining({ profileId: 'profile-1', recipientLabel: 'CHA' }),
+    ]);
+    expect(from).toHaveBeenCalledWith('profiles');
+    expect(query.select).toHaveBeenCalledWith('id,trigram');
+    expect(query.in).toHaveBeenCalledWith('id', ['profile-1']);
+  });
+
   it('reserva todos os itens em uma unica RPC com o mesmo token', async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [

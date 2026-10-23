@@ -25,6 +25,7 @@ export type AvopNotificationCandidate = {
   publicationDate: string;
   status: 'DRAFT' | 'PUBLISHED' | 'CLOSED';
   profileId: string;
+  recipientLabel: string | null;
   recipientEmail: string | null;
   profileActive: boolean;
   applicableNow: boolean;
@@ -264,6 +265,7 @@ export async function runAvopNotificationJob(input: {
   const recipientDigests = new Map<string, {
     profileId: string;
     recipient: string;
+    recipientLabel: string | null;
     pendingCandidates: AvopNotificationCandidate[];
     items: Array<{
       candidate: AvopNotificationCandidate;
@@ -288,9 +290,13 @@ export async function runAvopNotificationJob(input: {
         if (existingDigest && existingDigest.recipient !== recipient) {
           throw new Error('Inconsistent recipient for AVOP notification profile.');
         }
+        if (existingDigest && existingDigest.recipientLabel !== candidate.recipientLabel) {
+          throw new Error('Inconsistent recipient label for AVOP notification profile.');
+        }
         const digest = existingDigest ?? {
           profileId: candidate.profileId,
           recipient,
+          recipientLabel: candidate.recipientLabel,
           pendingCandidates: [],
           items: [],
         };
@@ -320,9 +326,13 @@ export async function runAvopNotificationJob(input: {
     if (existingDigest && existingDigest.recipient !== recipient) {
       throw new Error('Inconsistent recipient for AVOP notification profile.');
     }
+    if (existingDigest && existingDigest.recipientLabel !== candidate.recipientLabel) {
+      throw new Error('Inconsistent recipient label for AVOP notification profile.');
+    }
     const digest = existingDigest ?? {
       profileId: candidate.profileId,
       recipient,
+      recipientLabel: candidate.recipientLabel,
       pendingCandidates: [],
       items: [],
     };
@@ -400,6 +410,7 @@ export async function runAvopNotificationJob(input: {
     let providerMessageId: string | null;
     try {
       const message = buildAvopNotificationDigestEmail({
+        recipientLabel: digest.recipientLabel,
         items: digest.pendingCandidates.map((candidate) => ({
           avopNumber: candidate.avopNumber,
           title: candidate.title,
@@ -460,6 +471,7 @@ export async function runAvopNotificationJob(input: {
 }
 
 export function buildAvopNotificationDigestEmail(input: {
+  recipientLabel?: string | null;
   items: Array<{
     avopNumber: string;
     title: string;
@@ -468,7 +480,9 @@ export function buildAvopNotificationDigestEmail(input: {
   }>;
 }): { subject: string; body: string } {
   if (input.items.length === 0) throw new PermanentEmailError('Digest sem pendências de AVOP.');
-  if (input.items.length === 1) return buildAvopNotificationEmail(input.items[0]);
+  if (input.items.length === 1) {
+    return buildAvopNotificationEmail({ ...input.items[0], recipientLabel: input.recipientLabel });
+  }
 
   const itemLines = input.items.flatMap((item, index) => [
     `${index + 1}. ${safeBodyLine(item.avopNumber)} — ${safeBodyLine(item.title)}`,
@@ -479,7 +493,7 @@ export function buildAvopNotificationDigestEmail(input: {
   return {
     subject: 'Central Operacional — AVOPs pendentes de ciência',
     body: [
-      'Prezado(a),',
+      buildRecipientSalutation(input.recipientLabel),
       '',
       'Os seguintes AVOPs estão pendentes de leitura e ciência:',
       '',
@@ -494,6 +508,7 @@ export function buildAvopNotificationDigestEmail(input: {
 }
 
 export function buildAvopNotificationEmail(input: {
+  recipientLabel?: string | null;
   avopNumber: string;
   title: string;
   marker: AvopNotificationMarker;
@@ -503,7 +518,7 @@ export function buildAvopNotificationEmail(input: {
     return {
       subject: 'Central Operacional — novo AVOP para ciência',
       body: [
-        'Prezado(a),',
+        buildRecipientSalutation(input.recipientLabel),
         '',
         `Foi publicado o AVOP ${input.avopNumber} — ${input.title}, aplicável ao seu perfil.`,
         '',
@@ -520,7 +535,7 @@ export function buildAvopNotificationEmail(input: {
   return {
     subject: 'Central Operacional — pendência de ciência de AVOP',
     body: [
-      'Prezado(a),',
+      buildRecipientSalutation(input.recipientLabel),
       '',
       `Consta pendente o registro de ciência do AVOP ${input.avopNumber} — ${input.title}.`,
       '',
@@ -636,6 +651,11 @@ function safeBodyLine(value: string): string {
     throw new PermanentEmailError('Conteúdo inválido para mensagem de AVOP.');
   }
   return value;
+}
+
+function buildRecipientSalutation(recipientLabel: string | null | undefined): string {
+  if (!recipientLabel) return 'Prezado(a),';
+  return `Caro ${safeBodyLine(recipientLabel)},`;
 }
 
 function normalizeConcurrency(value: number): number {

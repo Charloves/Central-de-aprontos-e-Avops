@@ -23,6 +23,7 @@ const baseCandidate: AvopNotificationCandidate = {
   publicationDate: '2026-01-31',
   status: 'PUBLISHED',
   profileId: 'profile-1',
+  recipientLabel: 'CHA',
   recipientEmail: 'militar@example.test',
   profileActive: true,
   applicableNow: true,
@@ -132,6 +133,7 @@ describe('avop email notification rules', () => {
 
   it('monta templates em portugues com acentuacao exata para divulgacao e cobranca', () => {
     const initial = buildAvopNotificationEmail({
+      recipientLabel: 'CHA',
       avopNumber: 'AVOP-HML-001',
       title: 'Título fictício',
       marker: 'INITIAL',
@@ -139,7 +141,7 @@ describe('avop email notification rules', () => {
     });
     expect(initial.subject).toBe('Central Operacional — novo AVOP para ciência');
     expect(initial.body).toBe([
-      'Prezado(a),',
+      'Caro CHA,',
       '',
       'Foi publicado o AVOP AVOP-HML-001 — Título fictício, aplicável ao seu perfil.',
       '',
@@ -152,6 +154,7 @@ describe('avop email notification rules', () => {
     ].join('\n'));
 
     const reminder = buildAvopNotificationEmail({
+      recipientLabel: 'CHA',
       avopNumber: 'AVOP-HML-001',
       title: 'Título fictício',
       marker: 'WEEK_7',
@@ -159,7 +162,7 @@ describe('avop email notification rules', () => {
     });
     expect(reminder.subject).toBe('Central Operacional — pendência de ciência de AVOP');
     expect(reminder.body).toBe([
-      'Prezado(a),',
+      'Caro CHA,',
       '',
       'Consta pendente o registro de ciência do AVOP AVOP-HML-001 — Título fictício.',
       '',
@@ -176,6 +179,7 @@ describe('avop email notification rules', () => {
 
   it('consolida todas as pendencias do destinatario em uma unica mensagem', () => {
     const digest = buildAvopNotificationDigestEmail({
+      recipientLabel: 'CHA',
       items: [
         {
           avopNumber: 'AVOP 01-2026',
@@ -193,6 +197,7 @@ describe('avop email notification rules', () => {
     });
 
     expect(digest.subject).toBe('Central Operacional — AVOPs pendentes de ciência');
+    expect(digest.body.startsWith('Caro CHA,')).toBe(true);
     expect(digest.body).toContain('1. AVOP 01-2026 — Instrução de aviação');
     expect(digest.body).toContain('2. AVOP 02-2026 — Operação em São Paulo');
     expect(digest.body).toContain('https://central.example.test/portal/avops?avop=1');
@@ -216,6 +221,23 @@ describe('avop email notification rules', () => {
           acknowledgementUrl: 'https://central.example.test/portal/avops?avop=2',
         },
       ],
+    })).toThrow(PermanentEmailError);
+  });
+
+  it('preserva Unicode legitimo e rejeita controles no rotulo do destinatario', () => {
+    expect(buildAvopNotificationEmail({
+      recipientLabel: 'Álvaro Ç',
+      avopNumber: 'AVOP 01-2026',
+      title: 'Título válido',
+      marker: 'INITIAL',
+      acknowledgementUrl: 'https://central.example.test/portal/avops?avop=1',
+    }).body.startsWith('Caro Álvaro Ç,')).toBe(true);
+    expect(() => buildAvopNotificationEmail({
+      recipientLabel: 'CHA\r\nBcc: terceiro@example.test',
+      avopNumber: 'AVOP 01-2026',
+      title: 'Título válido',
+      marker: 'INITIAL',
+      acknowledgementUrl: 'https://central.example.test/portal/avops?avop=1',
     })).toThrow(PermanentEmailError);
   });
 });
@@ -277,6 +299,7 @@ describe('avop email notification job', () => {
       subject: 'Central Operacional — AVOPs pendentes de ciência',
     }));
     const body = fakeSender.send.mock.calls[0]?.[0].body;
+    expect(body?.startsWith('Caro CHA,')).toBe(true);
     expect(body).toContain('AVOP-HML-001');
     expect(body).toContain('AVOP-HML-002');
     expect(report).toMatchObject({ reserved: 2, sent: 1, itemsSent: 2 });
