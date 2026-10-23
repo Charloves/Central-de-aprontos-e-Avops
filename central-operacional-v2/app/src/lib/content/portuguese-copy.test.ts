@@ -15,6 +15,9 @@ describe('Portuguese user-facing copy', () => {
     expect(home).toContain('1º/11º GAV');
     expect(home).toContain('Ciência explícita, cobrança automática e auditoria.');
     expect(briefings).toContain('Não foi possível concluir a ação.');
+    expect(briefings).toContain('Ordem: presença, justificativa e material.');
+    expect(briefings).not.toContain('<th>Público</th>');
+    expect(briefings).not.toContain('<th>Situação</th>');
     expect(oiRules).toContain('Página não informada');
   });
 

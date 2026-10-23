@@ -175,6 +175,24 @@ th {
   margin: 0 0 8px;
 }
 
+.briefing-status-legend,
+.briefing-status-icons {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.briefing-status-legend {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 12px 0 0;
+}
+
+.briefing-status-icons {
+  font-size: 1.25rem;
+}
+
 .metric-grid {
   display: grid;
   gap: 10px;

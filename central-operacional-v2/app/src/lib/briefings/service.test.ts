@@ -4,6 +4,7 @@ import { FakeBriefingRepository } from './fake-briefing-repository';
 import {
   getBriefingCloseInstant,
   getAttendanceLabel,
+  getBriefingSituationIndicators,
   getEffectiveBriefingStatus,
   isValidBriefingMaterialUrl,
   normalizeJustificationText,
@@ -98,6 +99,54 @@ describe('Briefing module service', () => {
     expect(hsar.map((item) => item.id)).toEqual(expect.arrayContaining(['briefing-hsar', 'briefing-todos']));
     expect(misto.map((item) => item.id)).toEqual(expect.arrayContaining(['briefing-piloto', 'briefing-hsar', 'briefing-todos', 'briefing-misto']));
     expect(todos.map((item) => item.id)).toEqual(['briefing-todos']);
+  });
+
+  it('ordena os aprontos pela numeração natural crescente', async () => {
+    const repo = new FakeBriefingRepository({
+      profiles: [{ id: 'profile-piloto', active: true, audiences: ['PILOTO'] }],
+      briefings: [
+        briefing({ id: 'briefing-10', legacyId: 'APR-010', title: 'Dez', audiences: ['PILOTO'] }),
+        briefing({ id: 'briefing-2', legacyId: 'APR-002', title: 'Dois', audiences: ['PILOTO'] }),
+        briefing({ id: 'briefing-1', legacyId: 'APR-001', title: 'Um', audiences: ['PILOTO'] }),
+      ],
+    });
+
+    const list = await listApplicableBriefingsForSession(baseSession, repo, beforeClose);
+
+    expect(list.map((item) => item.legacyId)).toEqual(['APR-001', 'APR-002', 'APR-010']);
+  });
+
+  it('representa a situação individual com indicadores visuais acessíveis', () => {
+    const complete = briefing({
+      id: 'briefing-complete',
+      legacyId: 'APR-001',
+      title: 'Completo',
+      audiences: ['PILOTO'],
+      record: record({
+        briefingId: 'briefing-complete',
+        profileId: 'profile-piloto',
+        attendanceStatus: 'PRESENTE',
+        materialAcknowledged: true,
+      }),
+    });
+    const absent = briefing({
+      id: 'briefing-absent',
+      legacyId: 'APR-002',
+      title: 'Falta',
+      audiences: ['PILOTO'],
+      record: record({ briefingId: 'briefing-absent', profileId: 'profile-piloto', attendanceStatus: 'AUSENTE' }),
+    });
+
+    expect(getBriefingSituationIndicators(complete)).toEqual([
+      { icon: '✅', label: 'Presença: Presente' },
+      { icon: '➖', label: 'Justificativa não aplicável' },
+      { icon: '✅', label: 'Ciência de material registrada' },
+    ]);
+    expect(getBriefingSituationIndicators(absent)).toEqual([
+      { icon: '‼️', label: 'Presença: Falta' },
+      { icon: '‼️', label: 'Justificativa pendente' },
+      { icon: '‼️', label: 'Ciência de material pendente' },
+    ]);
   });
 
   it('nao lista aprontos para perfil inativo nem rascunho', async () => {

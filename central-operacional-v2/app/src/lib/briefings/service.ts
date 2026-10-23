@@ -3,6 +3,7 @@ import type { AuthenticatedSession } from '@/lib/auth/authorization';
 import {
   canAcknowledgeMaterial,
   canJustifyAbsence,
+  compareBriefingsByIdentifier,
   hasClientSuppliedBriefingIdentity,
   isValidBriefingMaterialUrl,
   normalizeJustificationText,
@@ -19,7 +20,8 @@ export async function listApplicableBriefingsForSession(
   repository: BriefingRepository,
   now?: Date,
 ): Promise<BriefingListItem[]> {
-  return repository.listApplicableBriefings(session.profileId, now);
+  const briefings = await repository.listApplicableBriefings(session.profileId, now);
+  return [...briefings].sort(compareBriefingsByIdentifier);
 }
 
 export async function acknowledgeBriefingMaterialForSession(input: {
