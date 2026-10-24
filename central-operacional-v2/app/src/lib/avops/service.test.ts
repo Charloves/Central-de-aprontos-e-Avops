@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AuthenticatedSession } from '@/lib/auth/authorization';
 import { FakeAvopRepository } from './fake-avop-repository';
 import { isValidDriveUrl } from './rules';
-import { acknowledgeAvopForSession, extractAcknowledgeAvopId, listApplicableAvopsForSession } from './service';
+import {
+  acknowledgeAvopForSession,
+  extractAcknowledgeAvopId,
+  listApplicableAvopsForSession,
+  listPublishedAvopsForSession,
+} from './service';
 import type { AvopListItem } from './types';
 
 vi.mock('server-only', () => ({}));
@@ -22,6 +27,7 @@ const publishedBase = {
   driveUrl: 'https://drive.google.com/file/d/ficticio/view',
   requiresAcknowledgement: true,
   acknowledgement: null,
+  applicable: true,
 };
 
 function avop(input: Partial<AvopListItem> & Pick<AvopListItem, 'id' | 'number' | 'title' | 'audiences'>): AvopListItem {
@@ -84,6 +90,34 @@ describe('AVOP module service', () => {
 
   it('nao lista AVOP para perfil inativo', async () => {
     await expect(listApplicableAvopsForSession({ ...baseSession, profileId: 'profile-inactive' }, repository())).resolves.toEqual([]);
+  });
+
+  it('ordena os AVOPs pela numeração natural crescente', async () => {
+    const repo = new FakeAvopRepository({
+      profiles: [{ id: 'profile-piloto', active: true, audiences: ['PILOTO'] }],
+      avops: [
+        avop({ id: 'avop-10', number: 'AVOP 010-2026', title: 'Dez', audiences: ['PILOTO'] }),
+        avop({ id: 'avop-2', number: 'AVOP 002-2026', title: 'Dois', audiences: ['PILOTO'] }),
+        avop({ id: 'avop-1', number: 'AVOP 001-2026', title: 'Um', audiences: ['PILOTO'] }),
+      ],
+    });
+
+    const list = await listApplicableAvopsForSession(baseSession, repo);
+
+    expect(list.map((item) => item.number)).toEqual(['AVOP 001-2026', 'AVOP 002-2026', 'AVOP 010-2026']);
+  });
+
+  it('lista o catálogo publicado, mas mantém a ciência restrita ao público aplicável', async () => {
+    const repo = repository();
+    const list = await listPublishedAvopsForSession(baseSession, repo);
+
+    expect(list.find((item) => item.id === 'avop-piloto')?.applicable).toBe(true);
+    expect(list.find((item) => item.id === 'avop-tripulante')?.applicable).toBe(false);
+    await expect(acknowledgeAvopForSession({
+      session: baseSession,
+      avopId: 'avop-tripulante',
+      repository: repo,
+    })).resolves.toMatchObject({ ok: false, reason: 'NOT_APPLICABLE' });
   });
 
   it('registra primeira ciencia e preserva o primeiro registro em repeticao', async () => {

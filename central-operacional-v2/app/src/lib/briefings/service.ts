@@ -6,6 +6,7 @@ import {
   compareBriefingsByIdentifier,
   hasClientSuppliedBriefingIdentity,
   isValidBriefingMaterialUrl,
+  isValidBriefingEventDate,
   normalizeJustificationText,
 } from './rules';
 import type {
@@ -36,7 +37,7 @@ export async function acknowledgeBriefingMaterialForSession(input: {
   try {
     const briefing = await input.repository.findApplicableBriefing(input.session.profileId, briefingId, input.now);
     if (!briefing) return { ok: false, reason: 'NOT_APPLICABLE' };
-    if (briefing.effectiveStatus !== 'OPEN' || !briefing.requiresMaterialAcknowledgement) {
+    if (briefing.status === 'DRAFT' || !isValidBriefingEventDate(briefing.eventDate) || !briefing.requiresMaterialAcknowledgement) {
       return { ok: false, reason: 'UNAVAILABLE' };
     }
     if (!isValidBriefingMaterialUrl(briefing.driveUrl)) return { ok: false, reason: 'INVALID_DOCUMENT' };

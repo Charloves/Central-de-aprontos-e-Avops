@@ -20,6 +20,7 @@ export type AvopListItem = {
   driveUrl: string | null;
   requiresAcknowledgement: boolean;
   audiences: AvopAudienceCode[];
+  applicable: boolean;
   acknowledgement: AvopAcknowledgement | null;
 };
 
@@ -29,6 +30,7 @@ export type AvopAcknowledgeResult =
 
 export type AvopRepository = {
   listApplicableAvops(profileId: string, now?: Date): Promise<AvopListItem[]>;
+  listPublishedAvops(profileId: string, now?: Date): Promise<AvopListItem[]>;
   findApplicableAvop(profileId: string, avopId: string, now?: Date): Promise<AvopListItem | null>;
   acknowledgeAvop(profileId: string, avopId: string, now?: Date, sessionId?: string | null): Promise<AvopAcknowledgement>;
 };

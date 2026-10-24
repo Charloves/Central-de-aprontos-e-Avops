@@ -90,14 +90,20 @@ export function getBriefingSituationIndicators(briefing: BriefingListItem): Brie
 }
 
 export function canAcknowledgeMaterial(briefing: BriefingListItem): boolean {
-  return briefing.effectiveStatus === 'OPEN'
+  return briefing.status !== 'DRAFT'
+    && isValidBriefingEventDate(briefing.eventDate)
     && briefing.requiresMaterialAcknowledgement
     && !briefing.record?.materialAcknowledged
     && isValidDriveUrl(briefing.driveUrl);
 }
 
 export function canJustifyAbsence(briefing: BriefingListItem): boolean {
-  return briefing.effectiveStatus === 'OPEN';
+  return briefing.status !== 'DRAFT'
+    && isValidBriefingEventDate(briefing.eventDate);
+}
+
+export function isValidBriefingEventDate(value: string | null): value is string {
+  return Boolean(value && isValidIsoDate(value));
 }
 
 export function normalizeJustificationText(value: unknown): string | null {

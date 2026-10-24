@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { requireSession } from '@/lib/auth/server';
 import { getAcknowledgementLabel, getAvopSituation, isValidDriveUrl } from '@/lib/avops/rules';
-import { listApplicableAvopsForSession } from '@/lib/avops/service';
+import { listApplicableAvopsForSession, listPublishedAvopsForSession } from '@/lib/avops/service';
 import { SupabaseAvopRepository } from '@/lib/avops/supabase-avop-repository';
 
 export const dynamic = 'force-dynamic';
 
 type AvopsPageProps = {
-  searchParams?: Promise<{ ack?: string | string[]; error?: string | string[] }>;
+  searchParams?: Promise<{ ack?: string | string[]; error?: string | string[]; view?: string | string[] }>;
 };
 
 export default async function AvopsPage({ searchParams }: AvopsPageProps) {
@@ -15,7 +15,12 @@ export default async function AvopsPage({ searchParams }: AvopsPageProps) {
   const params = searchParams ? await searchParams : {};
   const ack = Array.isArray(params.ack) ? params.ack[0] : params.ack;
   const error = Array.isArray(params.error) ? params.error[0] : params.error;
-  const avops = await listApplicableAvopsForSession(session, new SupabaseAvopRepository());
+  const view = Array.isArray(params.view) ? params.view[0] : params.view;
+  const showAll = view === 'all';
+  const repository = new SupabaseAvopRepository();
+  const avops = showAll
+    ? await listPublishedAvopsForSession(session, repository)
+    : await listApplicableAvopsForSession(session, repository);
 
   return (
     <main className="shell">
@@ -23,8 +28,12 @@ export default async function AvopsPage({ searchParams }: AvopsPageProps) {
         <div className="topbar">
           <div>
             <p className="muted">Módulo AVOP</p>
-            <h1>AVOPs aplicáveis</h1>
-            <p className="muted">Somente AVOPs destinados aos seus públicos atuais são exibidos.</p>
+            <h1>{showAll ? 'Todos os AVOPs publicados' : 'AVOPs do seu perfil'}</h1>
+            <p className="muted">
+              {showAll
+                ? 'Catálogo completo para consulta. A ciência continua disponível somente nos AVOPs relacionados ao seu perfil no QT.'
+                : 'AVOPs relacionados ao seu perfil no QT.'}
+            </p>
           </div>
           <Link className="button secondary" href="/portal">Voltar ao portal</Link>
         </div>
@@ -45,7 +54,6 @@ export default async function AvopsPage({ searchParams }: AvopsPageProps) {
                 <tr>
                   <th>AVOP</th>
                   <th>Emissão</th>
-                  <th>Prazo</th>
                   <th>Situação</th>
                   <th>Ciência</th>
                   <th>Documento</th>
@@ -64,11 +72,10 @@ export default async function AvopsPage({ searchParams }: AvopsPageProps) {
                         <span className="muted">{avop.title}</span>
                       </td>
                       <td>{formatDate(avop.publicationDate)}</td>
-                      <td>{avop.dueDate ? formatDate(avop.dueDate) : 'Sem prazo definido'}</td>
                       <td>{getAvopSituation(avop.status)}</td>
                       <td>
-                        <span className={acknowledged ? 'badge ok' : 'badge pending'}>
-                          {getAcknowledgementLabel(avop)}
+                        <span className={acknowledged ? 'badge ok' : avop.applicable ? 'badge pending' : 'badge'}>
+                          {avop.applicable || acknowledged ? getAcknowledgementLabel(avop) : 'Não se aplica'}
                         </span>
                       </td>
                       <td>
@@ -81,7 +88,9 @@ export default async function AvopsPage({ searchParams }: AvopsPageProps) {
                         )}
                       </td>
                       <td>
-                        {acknowledged ? (
+                        {!avop.applicable ? (
+                          <span className="muted">Consulta disponível. Ciência restrita ao público relacionado.</span>
+                        ) : acknowledged ? (
                           <button className="button secondary" type="button" disabled>AVOP assinado</button>
                         ) : (
                           <form action="/api/avops/acknowledge" method="post">
@@ -100,6 +109,14 @@ export default async function AvopsPage({ searchParams }: AvopsPageProps) {
             </table>
           </div>
         )}
+
+        <div className="actions">
+          {showAll ? (
+            <Link className="button secondary" href="/portal/avops">Mostrar AVOPs do meu perfil</Link>
+          ) : (
+            <Link className="button secondary" href="/portal/avops?view=all">Ver todos os AVOPs</Link>
+          )}
+        </div>
       </section>
     </main>
   );

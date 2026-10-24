@@ -9,11 +9,21 @@ function readSource(path: string): string {
 describe('Portuguese user-facing copy', () => {
   it('preserves representative Brazilian Portuguese characters in visible UI copy', () => {
     const home = readSource('app/page.tsx');
+    const portal = readSource('app/portal/page.tsx');
+    const avops = readSource('app/portal/avops/page.tsx');
     const briefings = readSource('app/portal/aprontos/page.tsx');
     const oiRules = readSource('lib/ois/rules.ts');
 
     expect(home).toContain('1º/11º GAV');
     expect(home).toContain('Ciência explícita, cobrança automática e auditoria.');
+    expect(portal).toContain('Bem-vindo, {session.trigram}');
+    expect(portal).toContain('ciência sem duplicidade');
+    expect(portal).not.toContain('Sessão protegida por cookie HttpOnly');
+    expect(portal).not.toContain('ciência idempotente');
+    expect(avops).toContain('AVOPs relacionados ao seu perfil no QT.');
+    expect(avops).toContain('Ver todos os AVOPs');
+    expect(avops).toContain("'Não se aplica'");
+    expect(avops).not.toContain('<th>Prazo</th>');
     expect(briefings).toContain('Não foi possível concluir a ação.');
     expect(briefings).toContain('Ordem: presença, justificativa e material.');
     expect(briefings).not.toContain('<th>Público</th>');
@@ -24,13 +34,11 @@ describe('Portuguese user-facing copy', () => {
   it('distingue textos de produção e homologação sem perder a acentuação', () => {
     expect(environmentCopy('production')).toEqual({
       homeDescription: 'Central Operacional V2 em ambiente de produção do 1º/11º GAV.',
-      sessionLabel: 'Sessão da Central Operacional V2',
-      portalDescription: 'Sessão protegida por cookie HttpOnly, com acesso aos módulos operacionais autorizados para o perfil.',
+      sessionLabel: 'Central Operacional - 1º/11º GAV',
     });
     expect(environmentCopy('development')).toEqual({
       homeDescription: 'Nova versão em ambiente isolado de desenvolvimento. A Central atual e a planilha oficial permanecem preservadas até a homologação e a aprovação formal.',
       sessionLabel: 'Sessão V2 de homologação',
-      portalDescription: 'Esta tela usa sessão protegida por cookie HttpOnly para validação dos módulos da V2.',
     });
   });
 
