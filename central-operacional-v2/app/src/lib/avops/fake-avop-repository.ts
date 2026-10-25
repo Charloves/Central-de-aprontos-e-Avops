@@ -32,8 +32,20 @@ export class FakeAvopRepository implements AvopRepository {
     return [...this.avops.values()]
       .filter((avop) => avop.status === 'PUBLISHED')
       .filter((avop) => hasAudienceIntersection(profile.audiences, avop.audiences))
-      .map((avop) => this.withAcknowledgement(profileId, avop))
+      .map((avop) => this.withAcknowledgement(profileId, { ...avop, applicable: true }))
       .sort((a, b) => b.publicationDate.localeCompare(a.publicationDate) || a.number.localeCompare(b.number));
+  }
+
+  async listPublishedAvops(profileId: string): Promise<AvopListItem[]> {
+    const profile = this.profiles.get(profileId);
+    if (!profile?.active) return [];
+
+    return [...this.avops.values()]
+      .filter((avop) => avop.status === 'PUBLISHED')
+      .map((avop) => this.withAcknowledgement(profileId, {
+        ...avop,
+        applicable: hasAudienceIntersection(profile.audiences, avop.audiences),
+      }));
   }
 
   async findApplicableAvop(profileId: string, avopId: string): Promise<AvopListItem | null> {
@@ -41,7 +53,7 @@ export class FakeAvopRepository implements AvopRepository {
     const avop = this.avops.get(avopId);
     if (!profile?.active || !avop || avop.status !== 'PUBLISHED') return null;
     if (!hasAudienceIntersection(profile.audiences, avop.audiences)) return null;
-    return this.withAcknowledgement(profileId, avop);
+    return this.withAcknowledgement(profileId, { ...avop, applicable: true });
   }
 
   async acknowledgeAvop(

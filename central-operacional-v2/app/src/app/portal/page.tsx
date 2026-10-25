@@ -21,7 +21,7 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
         <div className="topbar">
           <div>
             <p className="muted">{copy.sessionLabel}</p>
-            <h1>Usuário {session.trigram}</h1>
+            <h1>Bem-vindo, {session.trigram}</h1>
           </div>
           <form action="/api/auth/logout" method="post">
             <button className="button secondary" type="submit">Sair</button>
@@ -34,12 +34,10 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
           </p>
         ) : null}
 
-        <p>{copy.portalDescription}</p>
-
         <div className="grid">
           <article className="card">
             <h2>AVOP</h2>
-            <p>Listagem aplicável ao perfil e registro de ciência idempotente.</p>
+            <p>AVOPs relacionados ao seu perfil no QT e registro de ciência sem duplicidade.</p>
             <Link href="/portal/avops">Abrir AVOPs</Link>
           </article>
           <article className="card">

@@ -1,4 +1,4 @@
-import { environmentCopy } from '@/lib/content/environment-copy';
+import Image from 'next/image';
 
 type HomePageProps = {
   searchParams?: Promise<{ error?: string | string[] }>;
@@ -7,16 +7,24 @@ type HomePageProps = {
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = searchParams ? await searchParams : {};
   const error = Array.isArray(params.error) ? params.error[0] : params.error;
-  const copy = environmentCopy(process.env.APP_ENV);
 
   return (
-    <main className="shell">
-      <section className="panel">
-        <p className="muted">1º/11º GAV</p>
-        <h1>Central Operacional V2</h1>
-        <p>{copy.homeDescription}</p>
+    <main className="shell home-shell">
+      <section className="panel home-panel">
+        <header className="home-identity">
+          <Image
+            className="home-emblem"
+            src="/bolacha-1-11-gav.jpg"
+            alt="Bolacha do 1º/11º GAV"
+            width={144}
+            height={168}
+            priority
+          />
+          <p>1º/11º GAV</p>
+          <h1>Central Operacional - 1º/11º GAV</h1>
+        </header>
 
-        <form className="grid" action="/api/auth/login" method="post">
+        <form className="home-login" action="/api/auth/login" method="post">
           <label>
             <strong>Trigrama</strong>
             <input
@@ -29,9 +37,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               maxLength={8}
             />
           </label>
-          <div style={{ alignSelf: 'end' }}>
-            <button className="button" type="submit">Acessar ambiente V2</button>
-          </div>
+          <button className="button" type="submit">Acessar</button>
         </form>
 
         {error ? (
@@ -40,7 +46,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </p>
         ) : null}
 
-        <div className="grid" style={{ marginTop: 24 }}>
+        <div className="grid home-modules">
           <article className="card">
             <h2>AVOP</h2>
             <p className="muted">Ciência explícita, cobrança automática e auditoria.</p>
@@ -54,6 +60,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <p className="muted">Busca por aeronave, fase, missão e código-base.</p>
           </article>
         </div>
+
+        <footer className="home-footer">CDOUT - 1º/11º GAV</footer>
       </section>
     </main>
   );

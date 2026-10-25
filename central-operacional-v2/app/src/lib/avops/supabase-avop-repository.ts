@@ -35,21 +35,22 @@ export class SupabaseAvopRepository implements AvopRepository {
     const profileAudiences = await this.loadProfileAudiences(profileId, now);
     if (profileAudiences.length === 0) return [];
 
-    const { data, error } = await this.client
-      .from('avops')
-      .select('id,number,title,publication_date,drive_url,status,requires_acknowledgement,avop_audiences(audiences(code,active))')
-      .eq('status', 'PUBLISHED')
-      .order('publication_date', { ascending: false })
-      .order('number', { ascending: true })
-      .returns<AvopRow[]>();
-    if (error) throw error;
-
-    const applicable = (data ?? [])
-      .map((row) => mapAvopRow(row, null))
+    const applicable = (await this.loadPublishedAvops())
+      .map((row) => mapAvopRow(row, null, true))
       .filter((avop) => hasAudienceIntersection(profileAudiences, avop.audiences));
 
     const acknowledgements = await this.loadAcknowledgements(profileId, applicable.map((avop) => avop.id));
     return applicable.map((avop) => ({ ...avop, acknowledgement: acknowledgements.get(avop.id) ?? null }));
+  }
+
+  async listPublishedAvops(profileId: string, now: Date = new Date()): Promise<AvopListItem[]> {
+    const profileAudiences = await this.loadProfileAudiences(profileId, now);
+    const published = (await this.loadPublishedAvops()).map((row) => {
+      const avop = mapAvopRow(row, null, false);
+      return { ...avop, applicable: hasAudienceIntersection(profileAudiences, avop.audiences) };
+    });
+    const acknowledgements = await this.loadAcknowledgements(profileId, published.map((avop) => avop.id));
+    return published.map((avop) => ({ ...avop, acknowledgement: acknowledgements.get(avop.id) ?? null }));
   }
 
   async findApplicableAvop(profileId: string, avopId: string, now: Date = new Date()): Promise<AvopListItem | null> {
@@ -65,7 +66,7 @@ export class SupabaseAvopRepository implements AvopRepository {
     if (!data) return null;
 
     const acknowledgement = await this.loadAcknowledgement(profileId, avopId);
-    const avop = mapAvopRow(data, acknowledgement);
+    const avop = mapAvopRow(data, acknowledgement, true);
     if (avop.status !== 'PUBLISHED') return null;
     if (!hasAudienceIntersection(profileAudiences, avop.audiences)) return null;
     return avop;
@@ -115,6 +116,18 @@ export class SupabaseAvopRepository implements AvopRepository {
       .map((audience) => audience.code);
   }
 
+  private async loadPublishedAvops(): Promise<AvopRow[]> {
+    const { data, error } = await this.client
+      .from('avops')
+      .select('id,number,title,publication_date,drive_url,status,requires_acknowledgement,avop_audiences(audiences(code,active))')
+      .eq('status', 'PUBLISHED')
+      .order('publication_date', { ascending: false })
+      .order('number', { ascending: true })
+      .returns<AvopRow[]>();
+    if (error) throw error;
+    return data ?? [];
+  }
+
   private async loadAcknowledgements(profileId: string, avopIds: string[]): Promise<Map<string, AvopAcknowledgement>> {
     if (avopIds.length === 0) return new Map();
     const { data, error } = await this.client
@@ -139,7 +152,7 @@ export class SupabaseAvopRepository implements AvopRepository {
   }
 }
 
-function mapAvopRow(row: AvopRow, acknowledgement: AvopAcknowledgement | null): AvopListItem {
+function mapAvopRow(row: AvopRow, acknowledgement: AvopAcknowledgement | null, applicable: boolean): AvopListItem {
   return {
     id: row.id,
     number: row.number,
@@ -153,6 +166,7 @@ function mapAvopRow(row: AvopRow, acknowledgement: AvopAcknowledgement | null): 
       .map((join) => join.audiences)
       .filter((audience): audience is { code: string; active: boolean } => Boolean(audience?.active))
       .map((audience) => audience.code),
+    applicable,
     acknowledgement,
   };
 }

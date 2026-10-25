@@ -584,3 +584,9 @@ Banco:
 - `public.admin_save_profile(uuid, uuid, jsonb, timestamptz)` executa criação/edição transacional;
 - ambas usam advisory transaction locks, validação server-side e `search_path` fixo;
 - a migration é local até aplicação autorizada em produção.
+
+## Disponibilidade no portal operacional
+
+A visualização padrão de AVOPs continua limitada aos registros relacionados ao perfil atual. O usuário pode abrir o catálogo completo de AVOPs publicados para consulta documental, mas a ciência permanece restrita aos AVOPs aplicáveis aos seus públicos. Rascunhos e AVOPs encerrados não são expostos nesse catálogo.
+
+Os aprontos válidos relacionados aos públicos atuais do militar permanecem disponíveis no portal para consulta, ciência de material e justificativa mesmo após o fechamento operacional. O status persistido e o fechamento automático continuam preservados para histórico, relatórios e auditoria; a disponibilidade posterior não altera presença, não reabre o registro administrativo e não sobrescreve justificativas anteriores.

@@ -3,11 +3,29 @@ import { isValidDriveUrl } from './rules';
 import type { AvopAcknowledgeResult, AvopListItem, AvopRepository } from './types';
 import type { AuthenticatedSession } from '@/lib/auth/authorization';
 
+const avopNumberCollator = new Intl.Collator('pt-BR', {
+  numeric: true,
+  sensitivity: 'base',
+});
+
 export async function listApplicableAvopsForSession(
   session: AuthenticatedSession,
   repository: AvopRepository,
 ): Promise<AvopListItem[]> {
-  return repository.listApplicableAvops(session.profileId);
+  const avops = await repository.listApplicableAvops(session.profileId);
+  return [...avops].sort(compareAvopsByNumber);
+}
+
+export async function listPublishedAvopsForSession(
+  session: AuthenticatedSession,
+  repository: AvopRepository,
+): Promise<AvopListItem[]> {
+  const avops = await repository.listPublishedAvops(session.profileId);
+  return [...avops].sort(compareAvopsByNumber);
+}
+
+export function compareAvopsByNumber(a: AvopListItem, b: AvopListItem): number {
+  return avopNumberCollator.compare(a.number, b.number);
 }
 
 export async function acknowledgeAvopForSession(input: {

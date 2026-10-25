@@ -29,8 +29,8 @@ export default async function BriefingsPage({ searchParams }: BriefingsPageProps
         <div className="topbar">
           <div>
             <p className="muted">Módulo Aprontos</p>
-            <h1>Aprontos aplicáveis</h1>
-            <p className="muted">Somente aprontos destinados aos seus públicos atuais são exibidos.</p>
+            <h1>Aprontos do seu perfil</h1>
+            <p className="muted">Os aprontos válidos relacionados ao seu perfil permanecem disponíveis para consulta e ações.</p>
             <p className="briefing-status-legend" aria-label="Legenda da situação individual">
               <span>Ordem: presença, justificativa e material.</span>
               <span>✅ Concluído</span>

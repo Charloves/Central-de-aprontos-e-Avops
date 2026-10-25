@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Central Operacional V2',
+  title: 'Central Operacional - 1º/11º GAV',
   description: 'Portal operacional para AVOPs, Aprontos e OI.',
 };
 

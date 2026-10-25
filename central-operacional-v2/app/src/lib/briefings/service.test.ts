@@ -211,14 +211,15 @@ describe('Briefing module service', () => {
     expect(repo.materialWrites).toBe(0);
   });
 
-  it('rejeita ciencia em apronto nao aplicavel, fechado, sem exigencia, com data fechada ou link invalido', async () => {
+  it('mantem ciência disponível em apronto fechado ou vencido sem alterar a aplicabilidade', async () => {
     const repo = repository();
 
     await expect(acknowledgeBriefingMaterialForSession({ session: baseSession, briefingId: 'briefing-tripulante', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: false, reason: 'NOT_APPLICABLE' });
-    await expect(acknowledgeBriefingMaterialForSession({ session: baseSession, briefingId: 'briefing-closed', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: false, reason: 'UNAVAILABLE' });
+    await expect(acknowledgeBriefingMaterialForSession({ session: baseSession, briefingId: 'briefing-closed', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: true });
     await expect(acknowledgeBriefingMaterialForSession({ session: baseSession, briefingId: 'briefing-no-material', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: false, reason: 'UNAVAILABLE' });
-    await expect(acknowledgeBriefingMaterialForSession({ session: baseSession, briefingId: 'briefing-piloto', repository: repo, now: afterClose })).resolves.toMatchObject({ ok: false, reason: 'UNAVAILABLE' });
+    await expect(acknowledgeBriefingMaterialForSession({ session: baseSession, briefingId: 'briefing-piloto', repository: repo, now: afterClose })).resolves.toMatchObject({ ok: true });
     await expect(acknowledgeBriefingMaterialForSession({ session: baseSession, briefingId: 'briefing-invalid-link', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: false, reason: 'INVALID_DOCUMENT' });
+    await expect(acknowledgeBriefingMaterialForSession({ session: baseSession, briefingId: 'briefing-invalid-date', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: false, reason: 'UNAVAILABLE' });
   });
 
   it('registra justificativa sem transformar em presenca nem ciencia de material', async () => {
@@ -268,12 +269,13 @@ describe('Briefing module service', () => {
     await expect(justifyBriefingAbsenceForSession({ session: baseSession, briefingId: 'briefing-piloto', text: '<b>teste</b>', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: false, reason: 'INVALID_TEXT' });
   });
 
-  it('rejeita justificativa em apronto nao aplicavel, fechado ou com fechamento efetivo', async () => {
+  it('mantem justificativa disponível em apronto fechado ou vencido', async () => {
     const repo = repository();
 
     await expect(justifyBriefingAbsenceForSession({ session: baseSession, briefingId: 'briefing-tripulante', text: 'escala', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: false, reason: 'NOT_APPLICABLE' });
-    await expect(justifyBriefingAbsenceForSession({ session: baseSession, briefingId: 'briefing-closed', text: 'escala', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: false, reason: 'UNAVAILABLE' });
-    await expect(justifyBriefingAbsenceForSession({ session: baseSession, briefingId: 'briefing-piloto', text: 'escala', repository: repo, now: afterClose })).resolves.toMatchObject({ ok: false, reason: 'UNAVAILABLE' });
+    await expect(justifyBriefingAbsenceForSession({ session: baseSession, briefingId: 'briefing-closed', text: 'escala', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: true });
+    await expect(justifyBriefingAbsenceForSession({ session: baseSession, briefingId: 'briefing-piloto', text: 'escala', repository: repo, now: afterClose })).resolves.toMatchObject({ ok: true });
+    await expect(justifyBriefingAbsenceForSession({ session: baseSession, briefingId: 'briefing-invalid-date', text: 'escala', repository: repo, now: beforeClose })).resolves.toMatchObject({ ok: false, reason: 'UNAVAILABLE' });
   });
 
   it('rejeita identidade de terceiro enviada pelo navegador', async () => {
